@@ -1,0 +1,53 @@
+{
+  "classic_literature": {
+    "offset": 25
+  },
+  "chinese_literature": {
+    "offset": 25
+  },
+  "fiction": {
+    "offset": 25
+  },
+  "science_fiction": {
+    "offset": 25
+  },
+  "poetry": {
+    "offset": 25
+  },
+  "computer_science": {
+    "offset": 25
+  },
+  "programming": {
+    "offset": 24
+  },
+  "software_engineering": {
+    "offset": 24
+  },
+  "history": {
+    "offset": 24
+  },
+  "world_history": {
+    "offset": 24
+  },
+  "sociology": {
+    "offset": 24
+  },
+  "political_science": {
+    "offset": 24
+  },
+  "art": {
+    "offset": 24
+  },
+  "philosophy": {
+    "offset": 24
+  },
+  "economics": {
+    "offset": 24
+  },
+  "business": {
+    "offset": 24
+  },
+  "psychology": {
+    "offset": 24
+  }
+}

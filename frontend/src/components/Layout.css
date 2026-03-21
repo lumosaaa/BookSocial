@@ -1,0 +1,241 @@
+/*
+ * Layout.css
+ * BookSocial 三栏布局样式
+ * 所有颜色/间距均引用 tokens.css 中的 CSS 变量
+ */
+
+/* ─── 整体容器 ──────────────────────────────────────────────────── */
+.bs-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--color-surface);
+}
+
+/* ─── 左侧导航栏 ─────────────────────────────────────────────────── */
+.bs-sidebar {
+  width: var(--layout-sidebar-width);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  background-color: var(--color-surface-card);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-lg) var(--space-md);
+  z-index: var(--z-sticky);
+}
+
+/* Logo */
+.bs-sidebar__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+  cursor: pointer;
+  user-select: none;
+}
+
+.bs-sidebar__logo-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.bs-sidebar__logo-text {
+  font-family: var(--font-serif);
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  letter-spacing: 0.04em;
+}
+
+/* 导航菜单 */
+.bs-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.bs-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-semibold);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.bs-nav-item:hover {
+  background-color: var(--color-accent);
+  color: var(--color-primary);
+}
+
+.bs-nav-item--active {
+  background-color: var(--color-primary);
+  color: #fff;
+}
+
+.bs-nav-item--active:hover {
+  background-color: var(--color-primary-dark);
+  color: #fff;
+}
+
+.bs-nav-item__icon {
+  font-size: 18px;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── 中央内容区 ─────────────────────────────────────────────────── */
+.bs-main {
+  flex: 1;
+  margin-left: var(--layout-sidebar-width);
+  margin-right: var(--layout-panel-width);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶部搜索栏（移动端/平板才显示） */
+.bs-topbar {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background-color: var(--color-surface-card);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-sm) var(--space-md);
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.bs-topbar__search {
+  flex: 1;
+  border-radius: var(--radius-sm) !important;
+}
+
+.bs-topbar__actions {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+}
+
+.bs-topbar__icon {
+  font-size: 20px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.bs-topbar__icon:hover {
+  color: var(--color-primary);
+}
+
+/* 内容包裹 */
+.bs-content {
+  flex: 1;
+  max-width: var(--layout-content-max);
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-lg) var(--space-md);
+}
+
+/* ─── 右侧面板 ──────────────────────────────────────────────────── */
+.bs-panel {
+  width: var(--layout-panel-width);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-left: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  padding: var(--space-lg) var(--space-md);
+}
+
+/* ─── 底部 TabBar（仅移动端可见） ──────────────────────────────── */
+.bs-tabbar {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: var(--color-surface-card);
+  border-top: 1px solid var(--color-border);
+  z-index: var(--z-sticky);
+  justify-content: space-around;
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bs-tabbar__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  flex: 1;
+  height: 100%;
+  justify-content: center;
+  transition: color var(--transition-fast);
+}
+
+.bs-tabbar__item--active {
+  color: var(--color-primary);
+}
+
+.bs-tabbar__icon {
+  font-size: 20px;
+}
+
+.bs-tabbar__label {
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ─── 响应式断点 ─────────────────────────────────────────────────── */
+
+/* 平板（768px - 1279px）：隐藏右侧面板，中央内容扩展 */
+@media (max-width: 1279px) {
+  .bs-panel {
+    display: none;
+  }
+
+  .bs-main {
+    margin-right: 0;
+  }
+
+  .bs-topbar {
+    display: flex;
+  }
+}
+
+/* 移动端（< 768px）：隐藏左侧导航，显示底部TabBar */
+@media (max-width: 767px) {
+  .bs-sidebar {
+    display: none;
+  }
+
+  .bs-main {
+    margin-left: 0;
+    padding-bottom: 60px; /* 为底部TabBar留出空间 */
+  }
+
+  .bs-tabbar {
+    display: flex;
+  }
+
+  .bs-content {
+    padding: var(--space-md) var(--space-sm);
+  }
+}
