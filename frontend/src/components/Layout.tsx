@@ -16,6 +16,8 @@ import {
   UserOutlined,
   BellOutlined,
   SearchOutlined,
+  TeamOutlined,
+  BookOutlined,
 } from '@ant-design/icons';
 import { Badge, Input } from 'antd';
 import './Layout.css';
@@ -30,8 +32,9 @@ interface LayoutProps {
 const NAV_ITEMS = [
   { to: '/',          icon: <HomeOutlined />,    label: '首页' },
   { to: '/feed',      icon: <EditOutlined />,    label: '动态' },
-  { to: '/search',    icon: <SearchOutlined />,  label: '搜索' },
-  { to: '/shelf',     icon: <CompassOutlined />, label: '书架' },
+  { to: '/discover',  icon: <CompassOutlined />, label: '发现' },
+  { to: '/groups',    icon: <TeamOutlined />,    label: '小组' },
+  { to: '/shelf',     icon: <BookOutlined />,    label: '书架' },
   { to: '/profile',   icon: <UserOutlined />,    label: '我的' },
 ];
 

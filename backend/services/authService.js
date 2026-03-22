@@ -91,7 +91,7 @@ async function register({ email, code, username, password }) {
   await createDefaultPrivacy(userId);
 
   // 6. 签发 Token
-  const payload = { id: userId, username, status: 1 };
+  const payload = { id: userId, username, status: 1, role: 'user' };
   const accessToken = signToken(payload);
   const refreshToken = signRefreshToken({ id: userId });
 
@@ -108,7 +108,7 @@ async function register({ email, code, username, password }) {
 
 async function loginWithPassword({ email, password }) {
   const [rows] = await db.query(
-    `SELECT id, username, email, password_hash, status,
+    `SELECT id, username, email, password_hash, status, role,
             login_fail_count, locked_until, avatar_url
      FROM users WHERE email = ? LIMIT 1`,
     [email]
@@ -158,7 +158,7 @@ async function loginWithPassword({ email, password }) {
     [user.id]
   );
 
-  const payload = { id: user.id, username: user.username, status: user.status };
+  const payload = { id: user.id, username: user.username, status: user.status, role: user.role || 'user' };
   return {
     user: {
       id: user.id,
@@ -179,7 +179,7 @@ async function loginWithCode({ email, code }) {
   await verifyCode(email, code);
 
   const [rows] = await db.query(
-    'SELECT id, username, email, status, avatar_url FROM users WHERE email = ? LIMIT 1',
+    'SELECT id, username, email, status, role, avatar_url FROM users WHERE email = ? LIMIT 1',
     [email]
   );
   const user = rows[0];
@@ -191,7 +191,7 @@ async function loginWithCode({ email, code }) {
     [user.id]
   );
 
-  const payload = { id: user.id, username: user.username, status: user.status };
+  const payload = { id: user.id, username: user.username, status: user.status, role: user.role || 'user' };
   return {
     user: {
       id: user.id,
@@ -214,14 +214,14 @@ async function loginWithCode({ email, code }) {
 async function findOrCreateGoogleUser({ googleId, email, displayName, avatarUrl }) {
   // 1. 先按 googleId 查找
   let [rows] = await db.query(
-    'SELECT id, username, email, status FROM users WHERE google_id = ? LIMIT 1',
+    'SELECT id, username, email, status, role FROM users WHERE google_id = ? LIMIT 1',
     [googleId]
   );
 
   // 2. 按邮箱查找（已有邮箱账号，关联 Google）
   if (!rows.length && email) {
     [rows] = await db.query(
-      'SELECT id, username, email, status FROM users WHERE email = ? LIMIT 1',
+      'SELECT id, username, email, status, role FROM users WHERE email = ? LIMIT 1',
       [email]
     );
     if (rows.length) {
@@ -241,7 +241,7 @@ async function findOrCreateGoogleUser({ googleId, email, displayName, avatarUrl 
       'UPDATE users SET last_login_at = NOW() WHERE id = ?',
       [user.id]
     );
-    const payload = { id: user.id, username: user.username, status: user.status };
+    const payload = { id: user.id, username: user.username, status: user.status, role: user.role || 'user' };
     return {
       user: { id: user.id, username: user.username, email: user.email },
       accessToken: signToken(payload),
@@ -270,7 +270,7 @@ async function findOrCreateGoogleUser({ googleId, email, displayName, avatarUrl 
   const userId = result.insertId;
   await createDefaultPrivacy(userId);
 
-  const payload = { id: userId, username: finalUsername, status: 1 };
+  const payload = { id: userId, username: finalUsername, status: 1, role: 'user' };
   return {
     user: { id: userId, username: finalUsername, email: email || null },
     accessToken: signToken(payload),
@@ -295,7 +295,7 @@ async function refreshAccessToken(refreshToken) {
   }
 
   const [rows] = await db.query(
-    'SELECT id, username, status FROM users WHERE id = ? LIMIT 1',
+    'SELECT id, username, status, role FROM users WHERE id = ? LIMIT 1',
     [payload.id]
   );
   if (!rows.length) throw { status: 404, message: '用户不存在' };
@@ -306,6 +306,7 @@ async function refreshAccessToken(refreshToken) {
     id: user.id,
     username: user.username,
     status: user.status,
+    role: user.role || 'user',
   });
   return { accessToken: newAccessToken };
 }

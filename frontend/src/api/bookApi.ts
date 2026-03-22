@@ -41,7 +41,6 @@ export interface Book {
   description: string | null;
   categoryId: number | null;
   categoryName: string | null;
-  doubanRating: number | null;
   platformRating: number | null;
   ratingCount: number;
   shelfCount: number;

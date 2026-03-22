@@ -149,23 +149,28 @@ app.use('/api/v1/users', userRoutes);    // M1：个人信息 / 隐私 / 搜索
 app.use('/api/v1/users', shelfRoutes);   // M2：书架 /me/shelf/*
 
 // ── M4 · 私信 & 通知 ────────────────────────────────────────────────────────
-// const messageRoutes      = require('./routes/messages');
-// const notificationRoutes = require('./routes/notifications');
-// app.use('/api/v1/conversations', messageRoutes);
-// app.use('/api/v1/notifications', notificationRoutes);
-// app.use('/internal',             notificationRoutes);   // POST /internal/notify
+const messageRoutes = require('./routes/messages');
+const { router: notificationRoutes, internalRouter: notifyInternalRouter } = require('./routes/notifications');
+app.use('/api/v1/conversations', messageRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/internal',             notifyInternalRouter);   // POST /internal/notify
 
 // ── M5 · 小组 & 书籍讨论 ────────────────────────────────────────────────────
-// const groupRoutes       = require('./routes/groups');
-// const discussionRoutes  = require('./routes/discussions');
-// app.use('/api/v1/groups',      groupRoutes);
-// app.use('/api/v1/discussions', discussionRoutes);
+const groupRoutes = require('./routes/groups');
+const { bookDiscRouter, discRouter } = require('./routes/discussions');
+app.use('/api/v1/groups',       groupRoutes);
+app.use('/api/v1/books',        bookDiscRouter);   // /:bookId/discussions
+app.use('/api/v1/discussions',   discRouter);       // /:id, /:id/comments, /:id/likes
 
 // ── M6 · 推荐系统 & 运营 ────────────────────────────────────────────────────
-// const recRoutes   = require('./routes/recommendations');
-// const auditRoutes = require('./routes/audit');
-// app.use('/api/v1/recommendations', recRoutes);
-// app.use('/internal',               auditRoutes);  // POST /internal/audit/text
+const recRoutes = require('./routes/recommendations');
+const { internalAuditRouter, reportsRouter: auditReportsRouter, keywordsRouter } = require('./routes/audit');
+const interestProfileRoutes = require('./routes/interestProfile');
+app.use('/api/v1/recommendations', recRoutes);
+app.use('/internal',               internalAuditRouter);    // POST /internal/audit/text
+app.use('/api/v1/reports',         auditReportsRouter);     // M6 举报管理（GET/PUT，与 M3 POST 共存）
+app.use('/api/v1/admin/keywords',  keywordsRouter);
+app.use('/api/v1/users',          interestProfileRoutes);   // /:id/interest-profile
 
 // ════════════════════════════════════════════════════════════════════════════
 //  8. 错误处理（必须放在所有路由之后）
@@ -175,10 +180,15 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // ════════════════════════════════════════════════════════════════════════════
-//  Socket.io（M4 接管，此处预留 server 实例）
-//  const { initSocket } = require('./socket/socketServer');
-//  initSocket(server);
+//  Socket.io（M4 实时通信）
 // ════════════════════════════════════════════════════════════════════════════
+const { initSocket } = require('./socket');
+initSocket(server, app);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  M6 · 推荐系统定时任务
+// ════════════════════════════════════════════════════════════════════════════
+require('./jobs/recommendJob');
 
 // ════════════════════════════════════════════════════════════════════════════
 //  启动

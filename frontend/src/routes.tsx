@@ -119,10 +119,10 @@ const router = createBrowserRouter([
       },
 
       // ── 发现 / 推荐（模块6）────────────────────────────────
-      // {
-      //   path: '/discover',
-      //   element: lazyPage(() => import('./pages/discover/DiscoverPage')),
-      // },
+      {
+        path: '/discover',
+        element: lazyPage(() => import('./pages/discover/DiscoverPage')),
+      },
 
       // ── 动态详情（模块3）────────────────────────────────────
       //  包含完整帖子内容 + 嵌套评论区 + 转发弹窗
@@ -147,20 +147,20 @@ const router = createBrowserRouter([
       },
 
       // ── 私信（模块4）───────────────────────────────────────
-      // {
-      //   path: '/messages',
-      //   element: lazyPage(() => import('./pages/messages/MessagesPage')),
-      // },
-      // {
-      //   path: '/messages/:userId',
-      //   element: lazyPage(() => import('./pages/messages/ChatPage')),
-      // },
+      {
+        path: '/messages',
+        element: lazyPage(() => import('./pages/messages/ConversationsPage')),
+      },
+      {
+        path: '/messages/:userId',
+        element: lazyPage(() => import('./pages/messages/ChatPage')),
+      },
 
-      // // ── 通知（模块4）───────────────────────────────────────
-      // {
-      //   path: '/notifications',
-      //   element: lazyPage(() => import('./pages/notifications/NotificationsPage')),
-      // },
+      // ── 通知（模块4）───────────────────────────────────────
+      {
+        path: '/notifications',
+        element: lazyPage(() => import('./pages/notifications/NotificationsPage')),
+      },
 
       // ── 个人主页（模块1）───────────────────────────────────
       //
@@ -191,18 +191,18 @@ const router = createBrowserRouter([
       },
 
       // ── 读书小组 & 阅读挑战（模块5）────────────────────────
-      // {
-      //   path: '/groups',
-      //   element: lazyPage(() => import('./pages/groups/GroupListPage')),
-      // },
-      // {
-      //   path: '/groups/:id',
-      //   element: lazyPage(() => import('./pages/groups/GroupDetailPage')),
-      // },
-      // {
-      //   path: '/challenges/:id',
-      //   element: lazyPage(() => import('./pages/groups/ChallengePage')),
-      // },
+      {
+        path: '/groups',
+        element: lazyPage(() => import('./pages/groups/GroupListPage')),
+      },
+      {
+        path: '/groups/:id',
+        element: lazyPage(() => import('./pages/groups/GroupDetailPage')),
+      },
+      {
+        path: '/challenges/:id',
+        element: lazyPage(() => import('./pages/groups/ChallengePage')),
+      },
     ],
   },
 

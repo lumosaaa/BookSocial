@@ -214,11 +214,6 @@ const BookDetailPage: React.FC = () => {
                 </span>
               </Tooltip>
             )}
-            {book.doubanRating && (
-              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                豆瓣 {book.doubanRating}
-              </span>
-            )}
             {book.shelfCount > 0 && (
               <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
                 {book.shelfCount} 人读过

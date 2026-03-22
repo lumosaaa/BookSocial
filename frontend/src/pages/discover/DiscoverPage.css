@@ -1,0 +1,260 @@
+/* DiscoverPage.css — M6 · 发现页样式 */
+
+.discover-page {
+  padding: 0 0 40px;
+}
+
+.discover-header {
+  padding: 24px 24px 0;
+  margin-bottom: 8px;
+}
+
+.discover-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 4px;
+}
+
+.discover-header p {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  margin: 0;
+}
+
+.discover-tabs {
+  padding: 0 24px;
+}
+
+.discover-section {
+  padding-top: 8px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-center {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+/* ── 书籍网格 ─────────────────────────────── */
+.books-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.discover-book-card {
+  position: relative;
+  background: var(--color-accent);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.discover-book-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  transform: translateY(-2px);
+}
+
+.book-cover {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.book-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+}
+
+.book-info {
+  padding: 10px;
+}
+
+.book-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 2px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+}
+
+.book-author {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.rating-value {
+  font-size: 12px;
+  color: var(--color-secondary);
+  font-weight: 600;
+}
+
+.shelf-count {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin: 4px 0 0;
+}
+
+/* ── 热门排名 ─────────────────────────────── */
+.hot-rank-wrapper {
+  position: relative;
+}
+
+.rank-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rank-badge.rank-top {
+  background: var(--color-secondary);
+}
+
+/* ── 不感兴趣按钮 ──────────────────────────── */
+.dismiss-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  background: rgba(0,0,0,0.45);
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.discover-book-card:hover .dismiss-btn,
+.discover-friend-card:hover .dismiss-btn {
+  opacity: 1;
+}
+
+/* ── 书友网格 ─────────────────────────────── */
+.friends-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.discover-friend-card {
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 16px;
+  transition: box-shadow 0.2s;
+}
+
+.discover-friend-card:hover {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+.friend-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.friend-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.friend-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.friend-bio {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.friend-stats {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.follow-btn {
+  width: 100%;
+  border-color: var(--color-primary) !important;
+}
+
+/* ── 响应式 ───────────────────────────────── */
+@media (max-width: 768px) {
+  .discover-page { padding-bottom: 80px; }
+  .discover-header { padding: 16px 16px 0; }
+  .discover-tabs { padding: 0 16px; }
+  .books-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+  .friends-grid { grid-template-columns: 1fr; }
+}

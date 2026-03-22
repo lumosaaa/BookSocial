@@ -18,7 +18,6 @@ interface BookLike {
   author: string;
   coverUrl?: string | null;
   platformRating?: number | null;
-  doubanRating?: number | null;
   shelfCount?: number;
   categoryName?: string | null;
   pages?: number | null;
@@ -40,11 +39,10 @@ const BookCard: React.FC<BookCardProps> = ({
   const navigate = useNavigate();
   const handleClick = onClick ?? (() => navigate(`/books/${book.id}`));
 
-  // 优先显示平台评分，再显示豆瓣评分
-  const ratingRaw = book.platformRating ?? book.doubanRating;
-  // 转换为 5 星制显示
+  // 平台评分（5星制）
+  const ratingRaw = book.platformRating ?? null;
   const ratingFive = ratingRaw !== null && ratingRaw !== undefined
-    ? (book.platformRating ? ratingRaw : ratingRaw / 2)
+    ? ratingRaw
     : null;
 
   if (compact) {

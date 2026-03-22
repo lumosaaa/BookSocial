@@ -6,6 +6,7 @@
 
 const jwt = require('jsonwebtoken');
 const { error } = require('./response');
+const db = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'booksocial_dev_secret_change_in_prod';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -100,10 +101,34 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+/**
+ * 小组角色权限中间件（需配合 authMiddleware 使用）
+ * @param {number} minRole - 最低角色等级：0=成员, 1=管理员, 2=组长
+ */
+function requireGroupRole(minRole) {
+  return async (req, res, next) => {
+    const groupId = Number(req.params.id);
+    const userId = req.user.id;
+    try {
+      const [rows] = await db.query(
+        'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?',
+        [groupId, userId]
+      );
+      if (!rows.length || rows[0].role < minRole) {
+        return res.status(403).json(error('权限不足', 403));
+      }
+      next();
+    } catch (err) {
+      return res.status(500).json(error('权限校验失败', 500));
+    }
+  };
+}
+
 module.exports = {
   authMiddleware,
   optionalAuth,
   requireAdmin,
+  requireGroupRole,
   signToken,
   signRefreshToken,
 };

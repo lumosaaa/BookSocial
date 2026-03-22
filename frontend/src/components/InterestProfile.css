@@ -1,0 +1,87 @@
+/* InterestProfile.css — M6 · 兴趣画像组件样式 */
+
+.interest-profile {
+  padding: 0;
+}
+
+.profile-section {
+  margin-bottom: 20px;
+}
+
+.profile-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── 分类横向条形图 ────────────────────────── */
+.category-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.category-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cat-name {
+  width: 72px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.cat-bar-track {
+  flex: 1;
+  height: 10px;
+  background: var(--color-border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.cat-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.6s ease;
+}
+
+.cat-count {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  width: 40px;
+  flex-shrink: 0;
+}
+
+/* ── 标签云 ───────────────────────────────── */
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── 活跃热力图 ───────────────────────────── */
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  gap: 3px;
+  max-width: 360px;
+}
+
+.activity-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  cursor: default;
+}
+
+.activity-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin: 6px 0 0;
+}
