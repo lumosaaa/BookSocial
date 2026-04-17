@@ -18,6 +18,11 @@ export const browseBooks = async (page = 1, category) => {
 export const searchBooks = (q, page = 1, category) => apiClient.get('/books/search', { params: { q, page, ...(category ? { category } : {}) } });
 /** 获取书籍详情（含 myShelf 字段，需登录后才有） */
 export const getBook = (id) => apiClient.get(`/books/${id}`);
+export const getReaderManifest = (bookId) => apiClient.get(`/books/${bookId}/reader`);
+export const getReaderChapter = (bookId, chapterId) => apiClient.get(`/books/${bookId}/reader/chapters/${chapterId}`);
+export const saveReaderProgress = (bookId, payload) => apiClient.put(`/books/${bookId}/reader/progress`, payload);
+export const addReaderBookmark = (bookId, payload) => apiClient.post(`/books/${bookId}/reader/bookmarks`, payload);
+export const removeReaderBookmark = (bookId, bookmarkId) => apiClient.delete(`/books/${bookId}/reader/bookmarks/${bookmarkId}`);
 /** 获取全部书籍大类 */
 export const getCategories = () => apiClient.get('/books/categories');
 /** 获取书籍标签列表 */

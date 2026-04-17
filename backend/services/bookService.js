@@ -8,6 +8,9 @@
 const db    = require('../common/db');
 const axios = require('axios');
 
+const READER_STATUS_READING = 2;
+const READER_STATUS_FINISHED = 3;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  搜索
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -493,6 +496,8 @@ async function browseBooks(page = 1, category = null) {
             b.publisher, b.publish_date, b.pages, b.language,
             b.platform_rating, b.rating_count,
             b.shelf_count, b.review_count, b.category_id,
+            b.reader_available, b.reader_source, b.reader_source_url,
+            b.reader_license_note, b.reader_page_count,
             bc.name AS categoryName
      FROM books b
      LEFT JOIN book_categories bc ON bc.id = b.category_id
@@ -510,7 +515,299 @@ async function browseBooks(page = 1, category = null) {
   return { list: rows.map(formatBook), total: Number(total) };
 }
 
-// ══════════════════════════════════════════════════════════���════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+//  在线阅读
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function getReaderManifest(bookId, userId = null) {
+  const [[book]] = await db.query(
+    `SELECT id, title, author, cover_url, reader_available, reader_source,
+            reader_source_url, reader_license_note, reader_page_count
+     FROM books
+     WHERE id = ? AND is_active = 1`,
+    [bookId]
+  );
+
+  if (!book || Number(book.reader_available) !== 1) {
+    return null;
+  }
+
+  const [chapters] = await db.query(
+    `SELECT id, chapter_index, title, page_start, page_count, word_count
+     FROM book_chapters
+     WHERE book_id = ?
+     ORDER BY chapter_index ASC`,
+    [bookId]
+  );
+
+  let progress = null;
+  let bookmarks = [];
+
+  if (userId) {
+    const [[latestProgress]] = await db.query(
+      `SELECT rp.chapter_id, rp.page, rp.percent, rp.chapter_progress, rp.created_at,
+              bc.chapter_index, bc.title AS chapter_title
+       FROM reading_progress rp
+       LEFT JOIN book_chapters bc ON bc.id = rp.chapter_id
+       WHERE rp.user_id = ? AND rp.book_id = ?
+       ORDER BY rp.created_at DESC, rp.id DESC
+       LIMIT 1`,
+      [userId, bookId]
+    );
+
+    if (latestProgress) {
+      progress = {
+        chapterId: latestProgress.chapter_id,
+        chapterIndex: latestProgress.chapter_index || null,
+        chapterTitle: latestProgress.chapter_title || null,
+        page: latestProgress.page,
+        percent: latestProgress.percent !== null ? Number(latestProgress.percent) : null,
+        chapterProgress: latestProgress.chapter_progress !== null ? Number(latestProgress.chapter_progress) : 0,
+        updatedAt: latestProgress.created_at,
+      };
+    }
+
+    const [bookmarkRows] = await db.query(
+      `SELECT rb.id, rb.chapter_id, rb.chapter_progress, rb.page, rb.percent,
+              rb.quote, rb.note, rb.created_at, bc.chapter_index, bc.title AS chapter_title
+       FROM reader_bookmarks rb
+       JOIN book_chapters bc ON bc.id = rb.chapter_id
+       WHERE rb.user_id = ? AND rb.book_id = ?
+       ORDER BY rb.created_at DESC, rb.id DESC`,
+      [userId, bookId]
+    );
+
+    bookmarks = bookmarkRows.map(formatReaderBookmark);
+  }
+
+  return {
+    book: {
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      coverUrl: book.cover_url || null,
+      readerAvailable: true,
+      readerSource: book.reader_source || null,
+      readerSourceUrl: book.reader_source_url || null,
+      readerLicenseNote: book.reader_license_note || null,
+      readerPageCount: book.reader_page_count || null,
+    },
+    toc: chapters.map(chapter => ({
+      id: chapter.id,
+      chapterIndex: chapter.chapter_index,
+      title: chapter.title,
+      pageStart: chapter.page_start,
+      pageCount: chapter.page_count,
+      wordCount: chapter.word_count,
+    })),
+    progress,
+    bookmarks,
+  };
+}
+
+async function getReaderChapter(bookId, chapterId) {
+  const [[book]] = await db.query(
+    `SELECT id, title, reader_available FROM books WHERE id = ? AND is_active = 1`,
+    [bookId]
+  );
+
+  if (!book || Number(book.reader_available) !== 1) {
+    return null;
+  }
+
+  const [[chapter]] = await db.query(
+    `SELECT id, book_id, chapter_index, title, content, char_count, word_count, page_start, page_count
+     FROM book_chapters
+     WHERE id = ? AND book_id = ?`,
+    [chapterId, bookId]
+  );
+
+  if (!chapter) {
+    return null;
+  }
+
+  const [[prevChapter]] = await db.query(
+    `SELECT id, chapter_index, title
+     FROM book_chapters
+     WHERE book_id = ? AND chapter_index < ?
+     ORDER BY chapter_index DESC
+     LIMIT 1`,
+    [bookId, chapter.chapter_index]
+  );
+
+  const [[nextChapter]] = await db.query(
+    `SELECT id, chapter_index, title
+     FROM book_chapters
+     WHERE book_id = ? AND chapter_index > ?
+     ORDER BY chapter_index ASC
+     LIMIT 1`,
+    [bookId, chapter.chapter_index]
+  );
+
+  return {
+    id: chapter.id,
+    bookId: chapter.book_id,
+    title: chapter.title,
+    chapterIndex: chapter.chapter_index,
+    content: chapter.content,
+    charCount: chapter.char_count,
+    wordCount: chapter.word_count,
+    pageStart: chapter.page_start,
+    pageCount: chapter.page_count,
+    previousChapter: prevChapter ? {
+      id: prevChapter.id,
+      chapterIndex: prevChapter.chapter_index,
+      title: prevChapter.title,
+    } : null,
+    nextChapter: nextChapter ? {
+      id: nextChapter.id,
+      chapterIndex: nextChapter.chapter_index,
+      title: nextChapter.title,
+    } : null,
+  };
+}
+
+async function saveReaderProgress(userId, bookId, chapterId, chapterProgress = 0) {
+  const normalizedProgress = normalizeChapterProgress(chapterProgress);
+
+  return db.transaction(async (conn) => {
+    const [[book]] = await conn.query(
+      `SELECT id, reader_available, reader_page_count FROM books WHERE id = ? AND is_active = 1`,
+      [bookId]
+    );
+    if (!book || Number(book.reader_available) !== 1) {
+      return null;
+    }
+
+    const [[chapter]] = await conn.query(
+      `SELECT id, chapter_index, page_start, page_count
+       FROM book_chapters
+       WHERE id = ? AND book_id = ?`,
+      [chapterId, bookId]
+    );
+    if (!chapter) {
+      return null;
+    }
+
+    const totalPages = Math.max(1, Number(book.reader_page_count) || 1);
+    const page = clampPage(
+      Number(chapter.page_start) + Math.round(Math.max(0, Number(chapter.page_count) - 1) * normalizedProgress),
+      totalPages
+    );
+    const percent = Number((((page / totalPages) * 100)).toFixed(2));
+
+    let [[shelfEntry]] = await conn.query(
+      `SELECT id, status FROM user_shelves WHERE user_id = ? AND book_id = ? FOR UPDATE`,
+      [userId, bookId]
+    );
+
+    if (!shelfEntry) {
+      const [insertResult] = await conn.query(
+        `INSERT INTO user_shelves
+           (user_id, book_id, status, reading_progress, total_pages_ref, start_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, CURDATE(), NOW(), NOW())`,
+        [userId, bookId, READER_STATUS_READING, page, totalPages]
+      );
+      shelfEntry = { id: insertResult.insertId, status: READER_STATUS_READING };
+      await conn.query(
+        `UPDATE books SET shelf_count = shelf_count + 1 WHERE id = ?`,
+        [bookId]
+      );
+    }
+
+    const nextStatus = percent >= 99.9 ? READER_STATUS_FINISHED : Math.max(READER_STATUS_READING, Number(shelfEntry.status) || READER_STATUS_READING);
+    const finishDate = nextStatus === READER_STATUS_FINISHED ? 'finish_date = COALESCE(finish_date, CURDATE()),' : '';
+
+    await conn.query(
+      `UPDATE user_shelves
+       SET status = ?, reading_progress = ?, total_pages_ref = ?, ${finishDate}
+           updated_at = NOW()
+       WHERE id = ?`,
+      [nextStatus, page, totalPages, shelfEntry.id]
+    );
+
+    await conn.query(
+      `INSERT INTO reading_progress
+        (user_id, book_id, shelf_id, chapter_id, page, percent, chapter_progress, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NOW())`,
+      [userId, bookId, shelfEntry.id, chapter.id, page, percent, normalizedProgress]
+    );
+
+    return {
+      chapterId: chapter.id,
+      chapterIndex: chapter.chapter_index,
+      page,
+      percent,
+      chapterProgress: normalizedProgress,
+      status: nextStatus,
+    };
+  });
+}
+
+async function addReaderBookmark(userId, bookId, payload) {
+  const chapterProgress = normalizeChapterProgress(payload.chapterProgress);
+  const [[book]] = await db.query(
+    `SELECT id, reader_available, reader_page_count FROM books WHERE id = ? AND is_active = 1`,
+    [bookId]
+  );
+  if (!book || Number(book.reader_available) !== 1) {
+    return null;
+  }
+
+  const [[chapter]] = await db.query(
+    `SELECT id, chapter_index, title, page_start, page_count
+     FROM book_chapters
+     WHERE id = ? AND book_id = ?`,
+    [payload.chapterId, bookId]
+  );
+  if (!chapter) {
+    return null;
+  }
+
+  const totalPages = Math.max(1, Number(book.reader_page_count) || 1);
+  const page = clampPage(
+    Number(chapter.page_start) + Math.round(Math.max(0, Number(chapter.page_count) - 1) * chapterProgress),
+    totalPages
+  );
+  const percent = Number((((page / totalPages) * 100)).toFixed(2));
+
+  const [result] = await db.query(
+    `INSERT INTO reader_bookmarks
+      (user_id, book_id, chapter_id, chapter_progress, page, percent, quote, note)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      userId,
+      bookId,
+      chapter.id,
+      chapterProgress,
+      page,
+      percent,
+      sanitizeOptionalText(payload.quote, 500),
+      sanitizeOptionalText(payload.note, 200),
+    ]
+  );
+
+  const [[bookmark]] = await db.query(
+    `SELECT rb.id, rb.chapter_id, rb.chapter_progress, rb.page, rb.percent,
+            rb.quote, rb.note, rb.created_at, bc.chapter_index, bc.title AS chapter_title
+     FROM reader_bookmarks rb
+     JOIN book_chapters bc ON bc.id = rb.chapter_id
+     WHERE rb.id = ?`,
+    [result.insertId]
+  );
+
+  return formatReaderBookmark(bookmark);
+}
+
+async function removeReaderBookmark(userId, bookId, bookmarkId) {
+  const [result] = await db.query(
+    `DELETE FROM reader_bookmarks WHERE id = ? AND user_id = ? AND book_id = ?`,
+    [bookmarkId, userId, bookId]
+  );
+  return result.affectedRows > 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  格式化辅助函数
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -532,6 +829,11 @@ function formatBook(b) {
     ratingCount:    Number(b.rating_count)  || 0,
     shelfCount:     Number(b.shelf_count)   || 0,
     reviewCount:    Number(b.review_count)  || 0,
+    readerAvailable: Number(b.reader_available) === 1,
+    readerSource:   b.reader_source || null,
+    readerSourceUrl: b.reader_source_url || null,
+    readerLicenseNote: b.reader_license_note || null,
+    readerPageCount: b.reader_page_count || null,
     tags:           b.tags    || [],
     myShelf:        b.myShelf || null,
   };
@@ -558,6 +860,38 @@ function formatShelfEntry(s) {
   };
 }
 
+function formatReaderBookmark(row) {
+  return {
+    id: row.id,
+    chapterId: row.chapter_id,
+    chapterIndex: row.chapter_index,
+    chapterTitle: row.chapter_title,
+    chapterProgress: row.chapter_progress !== null ? Number(row.chapter_progress) : 0,
+    page: row.page || null,
+    percent: row.percent !== null ? Number(row.percent) : null,
+    quote: row.quote || null,
+    note: row.note || null,
+    createdAt: row.created_at,
+  };
+}
+
+function normalizeChapterProgress(value) {
+  const num = Number(value);
+  if (Number.isNaN(num)) return 0;
+  return Math.min(1, Math.max(0, Number(num.toFixed(4))));
+}
+
+function clampPage(page, totalPages) {
+  return Math.min(Math.max(1, page), totalPages);
+}
+
+function sanitizeOptionalText(value, maxLength) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLength);
+}
+
 module.exports = {
   searchBooks,
   browseBooks,
@@ -570,4 +904,9 @@ module.exports = {
   updateShelfEntry,
   removeFromShelf,
   exportShelfCsv,
+  getReaderManifest,
+  getReaderChapter,
+  saveReaderProgress,
+  addReaderBookmark,
+  removeReaderBookmark,
 };

@@ -5,7 +5,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
  */
 import { useEffect, useState } from 'react';
 import { Spin, Tag, Empty, Tooltip } from 'antd';
-import { getInterestProfile } from '../../api/discoverApi';
+import { getInterestProfile } from '../api/discoverApi';
 // 简单颜色映射（按分类热度深浅）
 const COLORS = [
     '#4A6741', '#6B8F62', '#8BAF82', '#A8C8A0',

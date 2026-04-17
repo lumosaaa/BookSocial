@@ -45,8 +45,72 @@ export interface Book {
   ratingCount: number;
   shelfCount: number;
   reviewCount: number;
+  readerAvailable: boolean;
+  readerSource: string | null;
+  readerSourceUrl: string | null;
+  readerLicenseNote: string | null;
+  readerPageCount: number | null;
   tags: BookTag[];
   myShelf: MyShelf | null;
+}
+
+export interface ReaderTocItem {
+  id: number;
+  chapterIndex: number;
+  title: string;
+  pageStart: number;
+  pageCount: number;
+  wordCount: number;
+}
+
+export interface ReaderProgress {
+  chapterId: number;
+  chapterIndex: number | null;
+  chapterTitle: string | null;
+  page: number | null;
+  percent: number | null;
+  chapterProgress: number;
+  updatedAt: string;
+}
+
+export interface ReaderBookmark {
+  id: number;
+  chapterId: number;
+  chapterIndex: number;
+  chapterTitle: string;
+  chapterProgress: number;
+  page: number | null;
+  percent: number | null;
+  quote: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface ReaderManifest {
+  book: Pick<Book, 'id' | 'title' | 'author' | 'coverUrl' | 'readerAvailable' | 'readerSource' | 'readerSourceUrl' | 'readerLicenseNote' | 'readerPageCount'>;
+  toc: ReaderTocItem[];
+  progress: ReaderProgress | null;
+  bookmarks: ReaderBookmark[];
+}
+
+export interface ReaderChapterLink {
+  id: number;
+  chapterIndex: number;
+  title: string;
+}
+
+export interface ReaderChapter {
+  id: number;
+  bookId: number;
+  title: string;
+  chapterIndex: number;
+  content: string;
+  charCount: number;
+  wordCount: number;
+  pageStart: number;
+  pageCount: number;
+  previousChapter: ReaderChapterLink | null;
+  nextChapter: ReaderChapterLink | null;
 }
 
 export interface ShelfEntry {
@@ -108,6 +172,21 @@ export const searchBooks = (q: string, page = 1, category?: number) =>
 /** 获取书籍详情（含 myShelf 字段，需登录后才有） */
 export const getBook = (id: number) =>
   apiClient.get<{ code: number; data: Book }>(`/books/${id}`);
+
+export const getReaderManifest = (bookId: number) =>
+  apiClient.get<{ code: number; data: ReaderManifest }>(`/books/${bookId}/reader`);
+
+export const getReaderChapter = (bookId: number, chapterId: number) =>
+  apiClient.get<{ code: number; data: ReaderChapter }>(`/books/${bookId}/reader/chapters/${chapterId}`);
+
+export const saveReaderProgress = (bookId: number, payload: { chapterId: number; chapterProgress: number }) =>
+  apiClient.put<{ code: number; data: ReaderProgress }>(`/books/${bookId}/reader/progress`, payload);
+
+export const addReaderBookmark = (bookId: number, payload: { chapterId: number; chapterProgress: number; quote?: string; note?: string }) =>
+  apiClient.post<{ code: number; data: ReaderBookmark }>(`/books/${bookId}/reader/bookmarks`, payload);
+
+export const removeReaderBookmark = (bookId: number, bookmarkId: number) =>
+  apiClient.delete<{ code: number; data: { success: boolean } }>(`/books/${bookId}/reader/bookmarks/${bookmarkId}`);
 
 /** 获取全部书籍大类 */
 export const getCategories = () =>

@@ -42,18 +42,19 @@ async function createNotification({ userId, type, actorId = null, targetId = nul
 
 async function getNotifications(myId, page = 1, pageSize = 20, onlyUnread = false) {
   const offset = (page - 1) * pageSize;
-  const unreadSql = onlyUnread ? 'AND n.is_read = 0' : '';
+  const unreadCond = onlyUnread ? 'AND is_read = 0' : '';
+  const unreadCondAlias = onlyUnread ? 'AND n.is_read = 0' : '';
 
   const [rows] = await db.query(
     `SELECT n.*, u.username AS actorName, u.avatar_url AS actorAvatar
      FROM notifications n LEFT JOIN users u ON u.id = n.actor_id
-     WHERE n.user_id = ? ${unreadSql}
+     WHERE n.user_id = ? ${unreadCondAlias}
      ORDER BY n.created_at DESC LIMIT ? OFFSET ?`,
     [myId, pageSize, offset]
   );
 
   const [[{ total }]] = await db.query(
-    `SELECT COUNT(*) AS total FROM notifications WHERE user_id = ? ${unreadSql}`,
+    `SELECT COUNT(*) AS total FROM notifications WHERE user_id = ? ${unreadCond}`,
     [myId]
   );
 

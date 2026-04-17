@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { Spin, Tag, Empty, Tooltip } from 'antd';
-import { getInterestProfile, type InterestProfile } from '../../api/discoverApi';
+import { getInterestProfile, type InterestProfile } from '../api/discoverApi';
 
 interface Props {
   userId: number;

@@ -81,6 +81,10 @@ const router = createBrowserRouter([
                 element: lazyPage(() => import('./pages/books/BookDetailPage')),
             },
             {
+                path: '/books/:id/read',
+                element: lazyPage(() => import('./pages/books/ReaderPage')),
+            },
+            {
                 path: '/shelf',
                 element: lazyPage(() => import('./pages/books/ShelfPage')),
             },

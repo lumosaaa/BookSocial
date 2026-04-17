@@ -5,11 +5,10 @@ import { STATUS_LABELS, STATUS_COLORS } from '../api/bookApi';
 const BookCard = ({ book, compact = false, shelfStatus, onClick, }) => {
     const navigate = useNavigate();
     const handleClick = onClick ?? (() => navigate(`/books/${book.id}`));
-    // 优先显示平台评分，再显示豆瓣评分
+    // 平台评分（5星制）
     const ratingRaw = book.platformRating ?? null;
-    // 转换为 5 星制显示
     const ratingFive = ratingRaw !== null && ratingRaw !== undefined
-        ? (book.platformRating ? ratingRaw : ratingRaw / 2)
+        ? ratingRaw
         : null;
     if (compact) {
         // ── 紧凑模式：水平布局，用于书架列表 ────────────────────────────────────

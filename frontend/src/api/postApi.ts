@@ -192,7 +192,7 @@ export const getPostComments = (postId: number, page = 1, pageSize = 10) =>
 
 /** 展开子评论 */
 export const getReplies = (commentId: number) =>
-  apiClient.get<Comment[]>(`/comments/${commentId}/replies`).then(r => r.data.data);
+  apiClient.get<{ data: Comment[] }>(`/comments/${commentId}/replies`).then(r => r.data.data);
 
 /** 发表评论 / 回复 */
 export const createComment = (

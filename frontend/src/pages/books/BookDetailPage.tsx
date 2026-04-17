@@ -223,6 +223,20 @@ const BookDetailPage: React.FC = () => {
 
           {/* ── 书架操作按钮 ── */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            {book.readerAvailable && (
+              <Button
+                type="primary"
+                onClick={() => navigate(`/books/${book.id}/read`)}
+                style={{
+                  borderRadius: 20,
+                  background: 'var(--color-primary, #4A6741)',
+                  borderColor: 'var(--color-primary, #4A6741)',
+                  fontWeight: 600,
+                }}
+              >
+                在线阅读
+              </Button>
+            )}
             {SHELF_ACTIONS.map(action => {
               const isActive = currentStatus === action.value;
               return (
@@ -348,6 +362,24 @@ const BookDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* ═══ 书籍简介 ═════════════════════════════════════════════════════════ */}
+      {(book.readerLicenseNote || book.readerSource) && (
+        <div style={{
+          marginBottom: 20,
+          padding: '12px 14px',
+          borderRadius: 12,
+          background: 'rgba(74,103,65,0.08)',
+          color: 'var(--color-text-primary)',
+          fontSize: 13,
+          lineHeight: 1.7,
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>在线阅读说明</div>
+          <div>
+            {[book.readerSource && `来源：${book.readerSource}`, book.readerLicenseNote].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+      )}
 
       {/* ═══ 书籍简介 ═════════════════════════════════════════════════════════ */}
       {book.description && (
