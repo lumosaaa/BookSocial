@@ -3,6 +3,7 @@
  */
 const db    = require('../common/db');
 const axios = require('axios');
+const { buildInternalUrl, getInternalHeaders } = require('./internalRequest');
 
 const MAX_GROUPS_PER_USER = 20; // 每人最多加入20个小组
 
@@ -588,8 +589,8 @@ async function checkOperatorRole(groupId, operatorId, minRole) {
 }
 
 function triggerNotify(params) {
-  axios.post(`http://localhost:${process.env.PORT || 3001}/internal/notify`, params, {
-    headers: { 'X-Internal-Secret': process.env.INTERNAL_SECRET || '' },
+  axios.post(buildInternalUrl('/internal/notify'), params, {
+    headers: getInternalHeaders(),
   }).catch(err => console.error('[M5 通知] 发送失败:', err.message));
 }
 
