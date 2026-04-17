@@ -5,6 +5,7 @@
 const express = require('express');
 const router  = express.Router();
 const { authMiddleware } = require('../common/authMiddleware');
+const { verifyInternalSecret } = require('../common/internalAuth');
 const notificationService = require('../services/notificationService');
 
 // GET /api/v1/notifications
@@ -54,6 +55,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 // 内部路由（挂载到 /internal）
 const internalRouter = express.Router();
 internalRouter.post('/notify', async (req, res) => {
+  if (!verifyInternalSecret(req, res)) return;
+
   try {
     const { userId, type, actorId, targetId, targetType, content } = req.body;
     if (!userId || !type) {

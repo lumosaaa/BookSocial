@@ -6,7 +6,7 @@
  * - 阅读进度更新（在读状态）
  * - 半星评分（已读状态）
  * - 标签展示 + 用户添加标签
- * - Tab：书评 / 笔记 / 讨论（占位，M3/M5 联调后填充）
+ * - Tab：书评 / 笔记 / 讨论（空态提示）
  */
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -411,7 +411,7 @@ const BookDetailPage: React.FC = () => {
             label: `书评 (${book.reviewCount})`,
             children: (
               <div style={{ padding: '20px 0', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-                书评内容由 M3 模块提供，联调后此处展示
+                暂无书评，欢迎成为第一个分享阅读感受的人。
               </div>
             ),
           },
@@ -420,7 +420,7 @@ const BookDetailPage: React.FC = () => {
             label: '笔记',
             children: (
               <div style={{ padding: '20px 0', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-                阅读笔记由 M3 模块提供，联调后此处展示
+                暂无公开笔记，记录你的摘抄与思考吧。
               </div>
             ),
           },
@@ -429,7 +429,7 @@ const BookDetailPage: React.FC = () => {
             label: '讨论',
             children: (
               <div style={{ padding: '20px 0', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-                书籍讨论区由 M5 模块提供，联调后此处展示
+                讨论区建设中，稍后将开放主题讨论。
               </div>
             ),
           },

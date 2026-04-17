@@ -6,11 +6,35 @@
 const { Server } = require('socket.io');
 const jwt        = require('jsonwebtoken');
 const redis      = require('./common/redis');
+const db = require('./common/db');
 const { sendMessage, recallMessage } = require('./services/messageService');
 const { createNotification, NOTIF_TYPE } = require('./services/notificationService');
 
 // 在线用户 Map：userId -> socketId
 const onlineUsers = new Map();
+
+async function emitOnlineStateToFollowers(io, userId, online) {
+  const [rows] = await db.query(
+    'SELECT follower_id FROM user_follows WHERE following_id = ?',
+    [userId]
+  );
+
+  rows.forEach((row) => {
+    const followerSocketId = onlineUsers.get(Number(row.follower_id));
+    if (followerSocketId) {
+      io.to(followerSocketId).emit('user_online', { userId, online });
+    }
+  });
+}
+
+async function getConversationPeerId(myId, conversationId) {
+  const [rows] = await db.query(
+    'SELECT user1_id, user2_id FROM conversations WHERE id = ? AND (user1_id = ? OR user2_id = ?)',
+    [conversationId, myId, myId]
+  );
+  if (!rows.length) return null;
+  return Number(rows[0].user1_id) === myId ? Number(rows[0].user2_id) : Number(rows[0].user1_id);
+}
 
 function initSocket(httpServer, app) {
   const io = new Server(httpServer, {
@@ -45,8 +69,8 @@ function initSocket(httpServer, app) {
     // Redis 记录在线状态
     redis.set(`session:${myId}`, socket.id, redis.TTL.SESSION).catch(() => {});
 
-    // 通知所有人该用户上线（只通知关注该用户的人）
-    socket.broadcast.emit('user_online', { userId: myId, online: true });
+    // 通知关注该用户的人
+    emitOnlineStateToFollowers(io, myId, true).catch(() => {});
 
     console.log(`[Socket] 用户 ${myId} 上线，socketId=${socket.id}`);
 
@@ -85,8 +109,13 @@ function initSocket(httpServer, app) {
       try {
         const { conversationId } = await recallMessage(myId, messageId);
 
-        // 通知会话双方
-        io.emit('message_recalled', { messageId, conversationId });
+        // 仅通知会话双方
+        socket.emit('message_recalled', { messageId, conversationId });
+        const peerId = await getConversationPeerId(myId, conversationId);
+        const peerSocketId = peerId ? onlineUsers.get(peerId) : null;
+        if (peerSocketId) {
+          io.to(peerSocketId).emit('message_recalled', { messageId, conversationId });
+        }
 
         if (typeof callback === 'function') callback({ ok: true });
       } catch (err) {
@@ -95,16 +124,20 @@ function initSocket(httpServer, app) {
     });
 
     // ── 标记已读（心跳） ──────────────────────
-    socket.on('mark_read', ({ conversationId }) => {
+    socket.on('mark_read', async ({ conversationId }) => {
       // 通知对方消息已读（可选，用于显示"已读"状态）
-      socket.broadcast.emit('messages_read', { conversationId, readerId: myId });
+      const peerId = await getConversationPeerId(myId, conversationId);
+      const peerSocketId = peerId ? onlineUsers.get(peerId) : null;
+      if (peerSocketId) {
+        io.to(peerSocketId).emit('messages_read', { conversationId, readerId: myId });
+      }
     });
 
     // ── 断开连接 ──────────────────────────────
     socket.on('disconnect', () => {
       onlineUsers.delete(myId);
       redis.del(`session:${myId}`).catch(() => {});
-      socket.broadcast.emit('user_online', { userId: myId, online: false });
+      emitOnlineStateToFollowers(io, myId, false).catch(() => {});
       console.log(`[Socket] 用户 ${myId} 下线`);
     });
   });

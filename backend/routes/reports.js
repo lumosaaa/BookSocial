@@ -12,13 +12,22 @@ const VALID_REASONS      = [1, 2, 3, 4, 5, 6];
 // POST /api/v1/reports
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { targetId, targetType, reason, detail = '' } = req.body;
+    const {
+      targetId,
+      targetType,
+      reason,
+      reasonType,
+      detail = '',
+      description = '',
+    } = req.body;
     const userId = req.user.id;
+    const finalReason = Number(reason ?? reasonType);
+    const finalDescription = String(detail || description || '').slice(0, 500);
 
     if (!targetId || !VALID_TARGET_TYPES.includes(+targetType)) {
       return res.fail('举报目标参数错误', 400);
     }
-    if (!VALID_REASONS.includes(+reason)) {
+    if (!VALID_REASONS.includes(finalReason)) {
       return res.fail('举报原因参数错误', 400);
     }
 
@@ -30,9 +39,9 @@ router.post('/', authMiddleware, async (req, res) => {
     if (existing) return res.fail('您已举报过该内容，请等待处理', 409);
 
     await db.query(
-      `INSERT INTO reports (reporter_id, target_id, target_type, reason, detail)
+      `INSERT INTO reports (reporter_id, target_id, target_type, reason_type, description)
        VALUES (?,?,?,?,?)`,
-      [userId, targetId, targetType, reason, detail.slice(0, 500)]
+      [userId, targetId, targetType, finalReason, finalDescription || null]
     );
 
     res.created({ message: '举报已提交，我们将尽快处理' });

@@ -8,9 +8,17 @@ const jwt = require('jsonwebtoken');
 const { error } = require('./response');
 const db = require('./db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'booksocial_dev_secret_change_in_prod';
+const JWT_SECRET = process.env.JWT_SECRET || (
+  process.env.NODE_ENV === 'production'
+    ? null
+    : 'booksocial_dev_secret_change_in_prod'
+);
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '30d';
+
+if (!JWT_SECRET) {
+  throw new Error('[Auth] JWT_SECRET 未配置，生产环境禁止使用默认密钥');
+}
 
 /**
  * 签发 Access Token

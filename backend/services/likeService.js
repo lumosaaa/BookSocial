@@ -2,6 +2,7 @@
 
 const db   = require('../common/db');
 const axios = require('axios');
+const { buildInternalUrl, getInternalHeaders } = require('./internalRequest');
 
 // target_type → 对应表及 like_count 字段
 const TARGET_MAP = {
@@ -15,7 +16,10 @@ const NOTIFY_TYPE = { 1: 2, 3: 2 };
 
 function triggerNotify(payload) {
   axios
-    .post('http://localhost:3001/internal/notify', payload, { timeout: 3000 })
+    .post(buildInternalUrl('/internal/notify'), payload, {
+      timeout: 3000,
+      headers: getInternalHeaders(),
+    })
     .catch(err => console.error('[M3→M4] 通知触发失败:', err.message));
 }
 

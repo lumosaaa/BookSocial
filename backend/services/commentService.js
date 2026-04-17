@@ -2,10 +2,14 @@
 
 const db   = require('../common/db');
 const axios = require('axios');
+const { buildInternalUrl, getInternalHeaders } = require('./internalRequest');
 
 function triggerNotify(payload) {
   axios
-    .post('http://localhost:3001/internal/notify', payload, { timeout: 3000 })
+    .post(buildInternalUrl('/internal/notify'), payload, {
+      timeout: 3000,
+      headers: getInternalHeaders(),
+    })
     .catch(err => console.error('[M3→M4] 通知触发失败:', err.message));
 }
 
