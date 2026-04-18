@@ -137,6 +137,7 @@ export interface Category {
   name: string;
   icon: string;
   sortOrder: number;
+  bookCount?: number;
 }
 
 export interface ShelfUpdatePayload {

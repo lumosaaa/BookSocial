@@ -1,8 +1,8 @@
 // src/pages/profile/MyProfilePage.tsx
 import { useState, useEffect } from 'react';
 import {
-  Avatar, Button, Tabs, Spin, Statistic,
-  Row, Col, Skeleton, message,
+  Avatar, Button, Tabs, Skeleton, message,
+  Row, Col, Statistic,
 } from 'antd';
 import {
   EditOutlined, SettingOutlined, UserOutlined,
@@ -11,6 +11,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { userApi } from '../../api/authApi';
 import { useAuthStore } from '../../store/authStore';
+import UserPostsPage from '../social/UserPostsPage';
 
 interface Profile {
   id: number;
@@ -236,30 +237,7 @@ export default function MyProfilePage() {
           {
             key: 'posts',
             label: `动态 ${profile.postCount > 0 ? profile.postCount : ''}`,
-            children: (
-              <div
-                style={{
-                  textAlign: 'center',
-                  padding: '48px 0',
-                  color: 'var(--color-text-secondary)',
-                }}
-              >
-                <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.3 }}>📝</div>
-                <div>暂无动态，快去分享你的阅读感悟吧</div>
-                <Button
-                  type="primary"
-                  style={{
-                    marginTop: 16,
-                    background: 'var(--color-primary)',
-                    borderColor: 'var(--color-primary)',
-                    borderRadius: 20,
-                  }}
-                  onClick={() => navigate('/create')}
-                >
-                  发布动态
-                </Button>
-              </div>
-            ),
+            children: <UserPostsPage userId={profile.id} initialTab="posts" hideTabs />,
           },
           {
             key: 'shelf',
@@ -273,7 +251,7 @@ export default function MyProfilePage() {
                 }}
               >
                 <BookOutlined style={{ fontSize: 48, opacity: 0.2, marginBottom: 12 }} />
-                <div>书架还是空的，快去添加喜欢的书籍</div>
+                <div>书架内容已在独立页面展示</div>
                 <Button
                   type="primary"
                   style={{
@@ -282,9 +260,9 @@ export default function MyProfilePage() {
                     borderColor: 'var(--color-primary)',
                     borderRadius: 20,
                   }}
-                  onClick={() => navigate('/search')}
+                  onClick={() => navigate('/shelf')}
                 >
-                  搜索书籍
+                  查看我的书架
                 </Button>
               </div>
             ),
@@ -292,12 +270,7 @@ export default function MyProfilePage() {
           {
             key: 'notes',
             label: '笔记',
-            children: (
-              <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-                <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.3 }}>📒</div>
-                <div>还没有阅读笔记</div>
-              </div>
-            ),
+            children: <UserPostsPage userId={profile.id} initialTab="notes" hideTabs />,
           },
           {
             key: 'bookmarks',

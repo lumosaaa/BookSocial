@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Avatar, Image, Rate, Tag, Tooltip, Typography, Dropdown, message } from 'antd';
+import { Avatar, Image, Rate, Tag, Tooltip, Typography, Dropdown, message, Modal, Input, Select } from 'antd';
 import {
   HeartOutlined, HeartFilled,
   MessageOutlined, StarOutlined, StarFilled,
@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { Post } from '../api/postApi';
-import { togglePostLike, bookmarkPost, unbookmark, deletePost } from '../api/postApi';
+import { togglePostLike, bookmarkPost, deletePost, submitReport } from '../api/postApi';
 import { useAuthStore } from '../store/authStore';
 
 const { Paragraph, Text } = Typography;
@@ -39,6 +39,30 @@ const PostCard: React.FC<Props> = ({
   const { user }         = useAuthStore();
   const [post, setPost]  = useState(initialPost);
   const [spoilerVisible, setSpoilerVisible] = useState(!post.hasSpoiler);
+  const [reportOpen, setReportOpen]     = useState(false);
+  const [reportReason, setReportReason] = useState<number>(1);
+  const [reportDetail, setReportDetail] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+
+  const handleReport = async () => {
+    setReportSubmitting(true);
+    try {
+      await submitReport({
+        targetId: post.id,
+        targetType: 1,
+        reason: reportReason,
+        detail: reportDetail.trim() || undefined,
+      });
+      message.success('举报已提交，我们会尽快处理');
+      setReportOpen(false);
+      setReportDetail('');
+      setReportReason(1);
+    } catch {
+      message.error('举报提交失败');
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
 
   // ── 点赞 ──────────────────────────────────────────────────
   const handleLike = async (e: React.MouseEvent) => {
@@ -90,7 +114,7 @@ const PostCard: React.FC<Props> = ({
   const menuItems = [
     ...(user?.id === post.userId
       ? [{ key: 'delete', label: '删除', danger: true, onClick: handleDelete }]
-      : [{ key: 'report', label: '举报', icon: <WarningOutlined />, onClick: () => navigate(`/report?targetId=${post.id}&targetType=1`) }]
+      : [{ key: 'report', label: '举报', icon: <WarningOutlined />, onClick: () => setReportOpen(true) }]
     ),
   ];
 
@@ -289,6 +313,38 @@ const PostCard: React.FC<Props> = ({
           </span>
         </div>
       )}
+
+      <Modal
+        title="举报内容"
+        open={reportOpen}
+        onOk={handleReport}
+        onCancel={() => setReportOpen(false)}
+        okText="提交举报"
+        confirmLoading={reportSubmitting}
+        okButtonProps={{ disabled: !reportReason }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Select
+            value={reportReason}
+            onChange={setReportReason}
+            options={[
+              { value: 1, label: '违禁信息' },
+              { value: 2, label: '色情低俗' },
+              { value: 3, label: '侵权' },
+              { value: 4, label: '广告骚扰' },
+              { value: 5, label: '人身攻击' },
+              { value: 6, label: '其他' },
+            ]}
+          />
+          <Input.TextArea
+            rows={4}
+            value={reportDetail}
+            onChange={e => setReportDetail(e.target.value)}
+            placeholder="补充说明（选填）"
+            maxLength={500}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -104,7 +104,6 @@ app.use('/api/v1/upload', uploadRoutes);  // Cloudinary 签名（M3/M5 复用）
 
 // ── M2 · 书籍 & 书架 ────────────────────────────────────────────────────────
 const bookRoutes  = require('./routes/books');
-const shelfRoutes = require('./routes/shelf');  // /me/shelf/*
 
 app.use('/api/v1/books', bookRoutes);
 
@@ -145,8 +144,7 @@ const followRoutes = require('./routes/follows');
 const userRoutes   = require('./routes/users');
 
 app.use('/api/v1/users', followRoutes);  // M3：关注 / 用户动态 / 用户笔记
-app.use('/api/v1/users', userRoutes);    // M1：个人信息 / 隐私 / 搜索
-app.use('/api/v1/users', shelfRoutes);   // M2：书架 /me/shelf/*
+app.use('/api/v1/users', userRoutes);    // M1：个人信息 / 隐私 / 搜索 + M2 书架
 
 // ── M4 · 私信 & 通知 ────────────────────────────────────────────────────────
 const messageRoutes = require('./routes/messages');
@@ -157,8 +155,10 @@ app.use('/internal',             notifyInternalRouter);   // POST /internal/noti
 
 // ── M5 · 小组 & 书籍讨论 ────────────────────────────────────────────────────
 const groupRoutes = require('./routes/groups');
+const groupChatRoutes = require('./routes/groupChat');
 const { bookDiscRouter, discRouter } = require('./routes/discussions');
 app.use('/api/v1/groups',       groupRoutes);
+app.use('/api/v1/groups',       groupChatRoutes);
 app.use('/api/v1/books',        bookDiscRouter);   // /:bookId/discussions
 app.use('/api/v1/discussions',   discRouter);       // /:id, /:id/comments, /:id/likes
 

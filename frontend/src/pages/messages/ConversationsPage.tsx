@@ -1,10 +1,10 @@
 // frontend/src/pages/messages/ConversationsPage.tsx
 // M4 · 私信会话列表页
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { List, Avatar, Badge, Empty, Spin, Typography, Tag } from 'antd';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { List, Avatar, Badge, Empty, Spin, Typography, Tag, message } from 'antd';
 import { MessageOutlined } from '@ant-design/icons';
-import { getConversations } from '../../api/messageApi';
+import { getConversations, getOrCreateConversation, msgTypePreview } from '../../api/messageApi';
 import type { Conversation } from '../../api/messageApi';
 import { useSocketStore } from '../../store/socketStore';
 import { formatDistanceToNow } from '../../utils/dateUtils';
@@ -13,6 +13,7 @@ const { Text, Title } = Typography;
 
 export default function ConversationsPage() {
   const navigate   = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [convs, setConvs]   = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage]     = useState(1);
@@ -21,6 +22,25 @@ export default function ConversationsPage() {
   // 当有新消息时刷新列表
   const newMessages = useSocketStore((s) => s.newMessages);
   const clearNewMessages = useSocketStore((s) => s.clearNewMessages);
+
+  // ?userId= 深链兼容：自动创建/打开会话再跳转
+  useEffect(() => {
+    const targetId = Number(searchParams.get('userId'));
+    if (!targetId) return;
+    (async () => {
+      try {
+        const conv = await getOrCreateConversation(targetId);
+        // 清掉 userId 参数后跳转
+        const next = new URLSearchParams(searchParams);
+        next.delete('userId');
+        setSearchParams(next, { replace: true });
+        navigate(`/messages/${conv.id}`, { replace: true });
+      } catch (err: any) {
+        message.warning(err?.response?.data?.message || '对方暂不接受私信');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchConvs = useCallback(async (p = 1) => {
     try {
@@ -47,10 +67,16 @@ export default function ConversationsPage() {
   }, [newMessages, fetchConvs, clearNewMessages]);
 
   const renderLastMsg = (conv: Conversation) => {
-    if (!conv.lastContent) return <Text type="secondary" italic>暂无消息，发个招呼吧</Text>;
-    const prefix = conv.lastSenderId !== conv.other.id ? '我: ' : '';
-    const text   = conv.lastContent.length > 24 ? conv.lastContent.slice(0, 24) + '…' : conv.lastContent;
-    return <Text type="secondary">{prefix}{text}</Text>;
+    const typePreview = msgTypePreview(conv.lastMsgType);
+    if (!conv.lastContent && !typePreview) {
+      return <Text type="secondary" italic>暂无消息，发个招呼吧</Text>;
+    }
+    const prefix = conv.lastSenderId && conv.lastSenderId !== conv.other.id ? '我: ' : '';
+    const body = typePreview
+      || (conv.lastContent && conv.lastContent.length > 24
+            ? conv.lastContent.slice(0, 24) + '…'
+            : conv.lastContent || '');
+    return <Text type="secondary">{prefix}{body}</Text>;
   };
 
   return (

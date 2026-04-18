@@ -6,7 +6,7 @@
  * PC端：三栏；移动端：单栏 + 底部TabBar
  */
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   HomeOutlined,
@@ -18,15 +18,30 @@ import {
   SearchOutlined,
   TeamOutlined,
   BookOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  RightOutlined,
+  LeftOutlined,
 } from '@ant-design/icons';
 import { Badge, Input } from 'antd';
 import './Layout.css';
+import { useAuthStore }   from '../store/authStore';
+import { useSocketStore } from '../store/socketStore';
+import {
+  getMessageUnreadCount,
+  getNotificationUnreadCount,
+} from '../api/messageApi';
 
 interface LayoutProps {
   children: React.ReactNode;
   rightPanel?: React.ReactNode; // 右侧面板内容，由页面级组件传入
+  rightPanelCollapsible?: boolean; // 右侧面板是否可折叠（如分类详情页的子分类筛选）
+  rightPanelTitle?: string;
   showSearch?: boolean;
 }
+
+const SIDEBAR_STORAGE_KEY = 'bs-sidebar-collapsed';
+const RIGHT_PANEL_STORAGE_KEY = 'bs-rightpanel-collapsed';
 
 // ─── 导航项配置 ──────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -38,18 +53,93 @@ const NAV_ITEMS = [
   { to: '/profile',   icon: <UserOutlined />,    label: '我的' },
 ];
 
-export default function Layout({ children, rightPanel, showSearch = true }: LayoutProps) {
+export default function Layout({
+  children,
+  rightPanel,
+  rightPanelCollapsible = false,
+  rightPanelTitle = '筛选',
+  showSearch = true,
+}: LayoutProps) {
   const navigate = useNavigate();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
+  });
+  const [panelCollapsed, setPanelCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(RIGHT_PANEL_STORAGE_KEY) === '1';
+  });
+
+  // 鉴权 + socket 接线
+  const isLoggedIn          = useAuthStore(s => s.isLoggedIn);
+  const accessToken         = useAuthStore(s => s.accessToken);
+  const connectSocket       = useSocketStore(s => s.connect);
+  const disconnectSocket    = useSocketStore(s => s.disconnect);
+  const setMessageUnread    = useSocketStore(s => s.setMessageUnread);
+  const setNotificationUnread = useSocketStore(s => s.setNotificationUnread);
+
+  const messageUnread      = useSocketStore(s => s.messageUnread);
+  const notificationUnread = useSocketStore(s => s.notificationUnread);
+
+  // 登录态变化时连接 / 断开 socket，并拉取未读数
+  useEffect(() => {
+    if (!isLoggedIn || !accessToken) {
+      disconnectSocket();
+      setMessageUnread(0);
+      setNotificationUnread(0);
+      return;
+    }
+
+    connectSocket(accessToken);
+
+    let cancelled = false;
+    Promise.all([
+      getMessageUnreadCount().catch(() => ({ unread: 0 })),
+      getNotificationUnreadCount().catch(() => ({ unread: 0 })),
+    ]).then(([msg, notif]) => {
+      if (cancelled) return;
+      setMessageUnread(msg?.unread ?? 0);
+      setNotificationUnread(notif?.unread ?? 0);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, accessToken, connectSocket, disconnectSocket, setMessageUnread, setNotificationUnread]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarCollapsed ? '1' : '0');
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(RIGHT_PANEL_STORAGE_KEY, panelCollapsed ? '1' : '0');
+  }, [panelCollapsed]);
+
+  const layoutStyle = useMemo(() => ({
+    ['--layout-sidebar-current' as const]: sidebarCollapsed
+      ? 'var(--layout-sidebar-width-collapsed)'
+      : 'var(--layout-sidebar-width)',
+    ['--layout-panel-current' as const]: rightPanel
+      ? (rightPanelCollapsible && panelCollapsed
+          ? 'var(--layout-panel-width-collapsed)'
+          : 'var(--layout-panel-width)')
+      : '0px',
+  }) as React.CSSProperties, [sidebarCollapsed, rightPanel, rightPanelCollapsible, panelCollapsed]);
 
   return (
-    <div className="bs-layout">
+    <div
+      className={`bs-layout${sidebarCollapsed ? ' bs-layout--sidebar-collapsed' : ''}${rightPanel ? ' bs-layout--has-panel' : ''}${rightPanelCollapsible && panelCollapsed ? ' bs-layout--panel-collapsed' : ''}`}
+      style={layoutStyle}
+    >
 
       {/* ── 左侧导航栏（PC） ─────────────────────────────────────── */}
-      <aside className="bs-sidebar">
+      <aside className={`bs-sidebar${sidebarCollapsed ? ' bs-sidebar--collapsed' : ''}`}>
         {/* Logo */}
         <div className="bs-sidebar__logo" onClick={() => navigate('/')}>
           <span className="bs-sidebar__logo-icon">📖</span>
-          <span className="bs-sidebar__logo-text">书·友</span>
+          {!sidebarCollapsed && <span className="bs-sidebar__logo-text">书·友</span>}
         </div>
 
         {/* 导航菜单 */}
@@ -59,15 +149,27 @@ export default function Layout({ children, rightPanel, showSearch = true }: Layo
               key={to}
               to={to}
               end={to === '/'}
+              title={sidebarCollapsed ? label : undefined}
               className={({ isActive }) =>
                 `bs-nav-item${isActive ? ' bs-nav-item--active' : ''}`
               }
             >
               <span className="bs-nav-item__icon">{icon}</span>
-              <span className="bs-nav-item__label">{label}</span>
+              {!sidebarCollapsed && <span className="bs-nav-item__label">{label}</span>}
             </NavLink>
           ))}
         </nav>
+
+        {/* 折叠按钮 */}
+        <button
+          type="button"
+          className="bs-sidebar__toggle"
+          onClick={() => setSidebarCollapsed(v => !v)}
+          aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+        >
+          {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          {!sidebarCollapsed && <span style={{ marginLeft: 8 }}>收起</span>}
+        </button>
       </aside>
 
       {/* ── 中央内容区 ──────────────────────────────────────────── */}
@@ -88,18 +190,22 @@ export default function Layout({ children, rightPanel, showSearch = true }: Layo
             />
           )}
           <div className="bs-topbar__actions">
-            <Badge count={0} size="small">
+            <Badge count={isLoggedIn ? notificationUnread : 0} size="small" overflowCount={99}>
               <BellOutlined
                 className="bs-topbar__icon"
                 onClick={() => navigate('/notifications')}
               />
             </Badge>
-            <Badge count={0} size="small">
+            <Badge count={isLoggedIn ? messageUnread : 0} size="small" overflowCount={99}>
               <MessageOutlined
                 className="bs-topbar__icon"
                 onClick={() => navigate('/messages')}
               />
             </Badge>
+            <UserOutlined
+              className="bs-topbar__icon"
+              onClick={() => navigate(isLoggedIn ? '/profile' : '/login')}
+            />
           </div>
         </header>
 
@@ -111,8 +217,21 @@ export default function Layout({ children, rightPanel, showSearch = true }: Layo
 
       {/* ── 右侧面板（PC，隐藏于移动端） ───────────────────────── */}
       {rightPanel && (
-        <aside className="bs-panel">
-          {rightPanel}
+        <aside className={`bs-panel${rightPanelCollapsible ? ' bs-panel--collapsible' : ''}${rightPanelCollapsible && panelCollapsed ? ' bs-panel--collapsed' : ''}`}>
+          {rightPanelCollapsible && (
+            <button
+              type="button"
+              className="bs-panel__toggle"
+              onClick={() => setPanelCollapsed(v => !v)}
+              aria-label={panelCollapsed ? '展开右侧栏' : '收起右侧栏'}
+            >
+              {panelCollapsed ? <LeftOutlined /> : <RightOutlined />}
+              {!panelCollapsed && <span>{rightPanelTitle}</span>}
+            </button>
+          )}
+          <div className={`bs-panel__inner${rightPanelCollapsible && panelCollapsed ? ' bs-panel__inner--hidden' : ''}`}>
+            {rightPanel}
+          </div>
         </aside>
       )}
 

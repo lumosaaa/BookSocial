@@ -7,6 +7,22 @@ const router  = express.Router();
 const { authMiddleware } = require('../common/authMiddleware');
 const notificationService = require('../services/notificationService');
 
+function verifyInternalSecret(req, res) {
+  const configuredSecret = process.env.INTERNAL_SECRET;
+  if (!configuredSecret) {
+    res.status(500).json({ code: 500, message: '内部服务密钥未配置', data: null, timestamp: Date.now() });
+    return false;
+  }
+
+  const secret = req.headers['x-internal-secret'];
+  if (secret !== configuredSecret) {
+    res.status(403).json({ code: 403, message: '无权限', data: null, timestamp: Date.now() });
+    return false;
+  }
+
+  return true;
+}
+
 // GET /api/v1/notifications
 router.get('/', authMiddleware, async (req, res) => {
   try {
@@ -54,6 +70,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 // 内部路由（挂载到 /internal）
 const internalRouter = express.Router();
 internalRouter.post('/notify', async (req, res) => {
+  if (!verifyInternalSecret(req, res)) return;
+
   try {
     const { userId, type, actorId, targetId, targetType, content } = req.body;
     if (!userId || !type) {

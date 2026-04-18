@@ -33,20 +33,20 @@ export interface InterestProfile {
 }
 
 // ── 推荐书籍 ──────────────────────────────────────────────────
-export async function getRecommendedBooks(limit = 20): Promise<RecommendedBook[]> {
-  const res = await apiClient.get('/recommendations/books', { params: { limit } });
+export async function getRecommendedBooks(limit = 20, offset = 0): Promise<RecommendedBook[]> {
+  const res = await apiClient.get('/recommendations/books', { params: { limit, offset } });
   return res.data.data || [];
 }
 
 // ── 推荐书友 ──────────────────────────────────────────────────
-export async function getRecommendedFriends(limit = 10): Promise<RecommendedFriend[]> {
-  const res = await apiClient.get('/recommendations/friends', { params: { limit } });
+export async function getRecommendedFriends(limit = 10, offset = 0): Promise<RecommendedFriend[]> {
+  const res = await apiClient.get('/recommendations/friends', { params: { limit, offset } });
   return res.data.data || [];
 }
 
 // ── 热门书籍榜 ────────────────────────────────────────────────
-export async function getHotBooks(limit = 20): Promise<RecommendedBook[]> {
-  const res = await apiClient.get('/recommendations/hot', { params: { limit } });
+export async function getHotBooks(limit = 20, offset = 0): Promise<RecommendedBook[]> {
+  const res = await apiClient.get('/recommendations/hot', { params: { limit, offset } });
   return res.data.data || [];
 }
 

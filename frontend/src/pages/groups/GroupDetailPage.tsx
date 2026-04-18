@@ -222,6 +222,15 @@ export default function GroupDetailPage() {
             </div>
           </div>
           <div>
+            {isLoggedIn && group.isMember && (
+              <Button
+                type="default"
+                onClick={() => navigate(`/groups/${groupId}/chat`)}
+                style={{ borderRadius: 20, marginBottom: 8, display: 'block' }}
+              >
+                群聊
+              </Button>
+            )}
             {isLoggedIn && (
               group.isMember ? (
                 <Popconfirm title="确定退出该小组？" onConfirm={handleJoinOrLeave} okText="退出" cancelText="取消">
@@ -240,7 +249,7 @@ export default function GroupDetailPage() {
             {isManager && (
               <Button
                 style={{ marginTop: 8, borderRadius: 20, display: 'block' }}
-                onClick={() => navigate(`/groups/${groupId}/settings`)}
+                onClick={() => message.info('小组管理页暂未开放，请先在当前页面完成成员与挑战管理')}
               >
                 管理小组
               </Button>

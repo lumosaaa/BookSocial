@@ -12,7 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Spin, Button, Rate, Tag, Tabs, Modal, InputNumber,
-  Input, message, Tooltip, Divider, Progress,
+  Input, message, Tooltip, Divider, Progress, Empty,
 } from 'antd';
 import {
   BookOutlined, HeartOutlined, ReadOutlined, CheckOutlined,
@@ -23,6 +23,9 @@ import {
   STATUS_LABELS, STATUS_COLORS,
   type Book,
 } from '../../api/bookApi';
+import { getBookNotes } from '../../api/postApi';
+import { listDiscussions } from '../../api/groupApi';
+import NoteCard from '../../components/NoteCard';
 import { useAuthStore } from '../../store/authStore';
 
 // ── 书架操作按钮配置 ────────────────────────────────────────────────────────────
@@ -45,16 +48,37 @@ const BookDetailPage: React.FC = () => {
   const [progressInput, setProgressInput] = useState(0);
   const [tagInput, setTagInput]       = useState('');
   const [tagAdding, setTagAdding]     = useState(false);
+  const [bookNotes, setBookNotes]     = useState<any[]>([]);
+  const [discussions, setDiscussions] = useState<any[]>([]);
+  const [tabLoading, setTabLoading]   = useState(false);
 
   // ── 加载书籍详情 ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!id || isNaN(Number(id))) { navigate('/books'); return; }
+    if (!id || isNaN(Number(id))) { navigate('/'); return; }
     setLoading(true);
     getBook(Number(id))
       .then(res => setBook(res.data.data))
-      .catch(() => { message.error('获取书籍信息失败'); navigate('/books'); })
+      .catch(() => { message.error('获取书籍信息失败'); navigate('/'); })
       .finally(() => setLoading(false));
   }, [id, navigate]);
+
+  useEffect(() => {
+    if (!book) return;
+    if (activeTab === 'notes') {
+      setTabLoading(true);
+      getBookNotes(book.id, 1, 10, 'hot')
+        .then(data => setBookNotes(data.list))
+        .catch(() => message.error('加载笔记失败'))
+        .finally(() => setTabLoading(false));
+    }
+    if (activeTab === 'discuss') {
+      setTabLoading(true);
+      listDiscussions(book.id, { page: 1, sort: 'hot' })
+        .then(data => setDiscussions(data.list))
+        .catch(() => message.error('加载讨论失败'))
+        .finally(() => setTabLoading(false));
+    }
+  }, [activeTab, book]);
 
   // ── 书架操作 ────────────────────────────────────────────────────────────────
   const handleShelfToggle = async (status: 1 | 2 | 3) => {
@@ -411,25 +435,57 @@ const BookDetailPage: React.FC = () => {
             label: `书评 (${book.reviewCount})`,
             children: (
               <div style={{ padding: '20px 0', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-                书评内容由 M3 模块提供，联调后此处展示
+                <Empty description="暂未开放专门的书评页面，请到讨论或笔记 Tab 查看读者反馈" />
               </div>
             ),
           },
           {
             key: 'notes',
             label: '笔记',
-            children: (
-              <div style={{ padding: '20px 0', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-                阅读笔记由 M3 模块提供，联调后此处展示
+            children: tabLoading ? (
+              <div style={{ padding: 24, textAlign: 'center' }}><Spin /></div>
+            ) : bookNotes.length === 0 ? (
+              <Empty description="暂无公开笔记" style={{ padding: 24 }} />
+            ) : (
+              <div style={{ padding: '12px 0' }}>
+                {bookNotes.map(n => <NoteCard key={n.id} note={n} />)}
               </div>
             ),
           },
           {
             key: 'discuss',
             label: '讨论',
-            children: (
-              <div style={{ padding: '20px 0', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-                书籍讨论区由 M5 模块提供，联调后此处展示
+            children: tabLoading ? (
+              <div style={{ padding: 24, textAlign: 'center' }}><Spin /></div>
+            ) : discussions.length === 0 ? (
+              <Empty description="还没有讨论，第一个发起话题吧" style={{ padding: 24 }} />
+            ) : (
+              <div style={{ padding: '12px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {discussions.map(d => (
+                  <div
+                    key={d.id}
+                    style={{
+                      padding: '12px 14px',
+                      background: '#fff',
+                      borderRadius: 12,
+                      border: '1px solid #f0f0f0',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => navigate(`/groups`)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <strong style={{ fontSize: 14 }}>{d.title}</strong>
+                      <Tag color="green" style={{ fontSize: 11 }}>{d.categoryName}</Tag>
+                      {d.hasSpoiler && <Tag color="red" style={{ fontSize: 11 }}>剧透</Tag>}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                      {d.content?.slice(0, 120)}{d.content?.length > 120 ? '…' : ''}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 12, color: '#999' }}>
+                      @{d.username} · {d.commentCount} 评论 · {d.likeCount} 赞
+                    </div>
+                  </div>
+                ))}
               </div>
             ),
           },

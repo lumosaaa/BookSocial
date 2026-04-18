@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button, message } from 'antd';
 import { UserAddOutlined, UsergroupAddOutlined, CheckOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { toggleFollow } from '../api/postApi';
 import { useAuthStore } from '../store/authStore';
 
@@ -8,7 +9,7 @@ interface Props {
   userId: number;
   initialFollowed?: boolean;
   isMutual?: boolean;
-  onToggle?: (followed: boolean, isMutual: boolean) => void;
+  onToggle?: (followed: boolean, isMutual: boolean, followerCount: number) => void;
   size?: 'small' | 'middle' | 'large';
 }
 
@@ -19,23 +20,32 @@ const FollowButton: React.FC<Props> = ({
   onToggle,
   size = 'middle',
 }) => {
-  const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const { user, isLoggedIn } = useAuthStore();
   const [followed, setFollowed]  = useState(initialFollowed);
   const [mutual, setMutual]      = useState(isMutual);
   const [loading, setLoading]    = useState(false);
 
+  // 父级初始值变化时同步
+  React.useEffect(() => { setFollowed(initialFollowed); }, [initialFollowed]);
+  React.useEffect(() => { setMutual(isMutual); }, [isMutual]);
+
   // 不展示自己对自己的按钮
-  if (!user || user.id === userId) return null;
+  if (user && user.id === userId) return null;
 
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isLoggedIn) {
+      navigate('/login');
+      return;
+    }
     if (loading) return;
     setLoading(true);
     try {
       const res = await toggleFollow(userId);
       setFollowed(res.followed);
       setMutual(res.isMutual);
-      onToggle?.(res.followed, res.isMutual);
+      onToggle?.(res.followed, res.isMutual, res.followerCount);
       message.success(res.followed ? '关注成功' : '已取消关注');
     } catch {
       message.error('操作失败，请重试');

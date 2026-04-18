@@ -194,12 +194,21 @@ async function getBookById(bookId, userId = null) {
 
 async function getCategories() {
   const [rows] = await db.query(
-    `SELECT id, name, icon, sort_order
-     FROM book_categories
-     WHERE is_active = 1
-     ORDER BY sort_order`
+    `SELECT bc.id, bc.name, bc.icon, bc.sort_order,
+            COUNT(b.id) AS book_count
+     FROM book_categories bc
+     LEFT JOIN books b ON b.category_id = bc.id AND b.is_active = 1
+     WHERE bc.is_active = 1
+     GROUP BY bc.id, bc.name, bc.icon, bc.sort_order
+     ORDER BY bc.sort_order`
   );
-  return rows;
+  return rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    icon: r.icon,
+    sortOrder: r.sort_order,
+    bookCount: Number(r.book_count) || 0,
+  }));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -696,41 +705,47 @@ async function saveReaderProgress(userId, bookId, chapterId, chapterProgress = 0
     );
     const percent = Number((((page / totalPages) * 100)).toFixed(2));
 
-    let [[shelfEntry]] = await conn.query(
+    const [[shelfEntry]] = await conn.query(
       `SELECT id, status FROM user_shelves WHERE user_id = ? AND book_id = ? FOR UPDATE`,
       [userId, bookId]
     );
 
-    if (!shelfEntry) {
-      const [insertResult] = await conn.query(
-        `INSERT INTO user_shelves
-           (user_id, book_id, status, reading_progress, total_pages_ref, start_date, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, CURDATE(), NOW(), NOW())`,
-        [userId, bookId, READER_STATUS_READING, page, totalPages]
-      );
-      shelfEntry = { id: insertResult.insertId, status: READER_STATUS_READING };
-      await conn.query(
-        `UPDATE books SET shelf_count = shelf_count + 1 WHERE id = ?`,
-        [bookId]
-      );
+    let shelfId = null;
+    let nextStatus = null;
+
+    if (shelfEntry) {
+      shelfId = shelfEntry.id;
+      const oldStatus = Number(shelfEntry.status) || null;
+      nextStatus = oldStatus;
+
+      if (percent >= 99.9 && nextStatus !== READER_STATUS_FINISHED) {
+        nextStatus = READER_STATUS_FINISHED;
+      }
+
+      if (nextStatus === READER_STATUS_FINISHED && oldStatus !== READER_STATUS_FINISHED) {
+        await conn.query(
+          'UPDATE users SET book_count = book_count + 1 WHERE id = ?',
+          [userId]
+        );
+      }
+
+      if (nextStatus !== null) {
+        const finishDate = nextStatus === READER_STATUS_FINISHED ? 'finish_date = COALESCE(finish_date, CURDATE()),' : '';
+        await conn.query(
+          `UPDATE user_shelves
+           SET status = ?, reading_progress = ?, total_pages_ref = ?, ${finishDate}
+               updated_at = NOW()
+           WHERE id = ?`,
+          [nextStatus, page, totalPages, shelfId]
+        );
+      }
     }
-
-    const nextStatus = percent >= 99.9 ? READER_STATUS_FINISHED : Math.max(READER_STATUS_READING, Number(shelfEntry.status) || READER_STATUS_READING);
-    const finishDate = nextStatus === READER_STATUS_FINISHED ? 'finish_date = COALESCE(finish_date, CURDATE()),' : '';
-
-    await conn.query(
-      `UPDATE user_shelves
-       SET status = ?, reading_progress = ?, total_pages_ref = ?, ${finishDate}
-           updated_at = NOW()
-       WHERE id = ?`,
-      [nextStatus, page, totalPages, shelfEntry.id]
-    );
 
     await conn.query(
       `INSERT INTO reading_progress
         (user_id, book_id, shelf_id, chapter_id, page, percent, chapter_progress, note, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NOW())`,
-      [userId, bookId, shelfEntry.id, chapter.id, page, percent, normalizedProgress]
+      [userId, bookId, shelfId, chapter.id, page, percent, normalizedProgress]
     );
 
     return {

@@ -11,13 +11,15 @@ type TabKey = 'posts' | 'notes';
 interface Props {
   /** 可从父组件（MyProfilePage / UserProfilePage）传入，也可从路由参数读取 */
   userId?: number;
+  initialTab?: TabKey;
+  hideTabs?: boolean;
 }
 
-const UserPostsPage: React.FC<Props> = ({ userId: propUserId }) => {
+const UserPostsPage: React.FC<Props> = ({ userId: propUserId, initialTab = 'posts', hideTabs = false }) => {
   const { id: paramId }          = useParams<{ id: string }>();
   const userId                   = propUserId ?? Number(paramId);
 
-  const [tab, setTab]            = useState<TabKey>('posts');
+  const [tab, setTab]            = useState<TabKey>(initialTab);
   const [posts, setPosts]        = useState<Post[]>([]);
   const [notes, setNotes]        = useState<ReadingNote[]>([]);
   const [postPage, setPostPage]  = useState(1);
@@ -55,9 +57,13 @@ const UserPostsPage: React.FC<Props> = ({ userId: propUserId }) => {
   }, [userId]);
 
   useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab, userId]);
+
+  useEffect(() => {
     if (tab === 'posts') loadPosts(1);
     else                 loadNotes(1);
-  }, [tab, userId]);
+  }, [tab, userId, loadPosts, loadNotes]);
 
   const handlePostDeleted = (id: number) =>
     setPosts(prev => prev.filter(p => p.id !== id));
@@ -69,12 +75,14 @@ const UserPostsPage: React.FC<Props> = ({ userId: propUserId }) => {
 
   return (
     <div>
-      <Tabs
-        activeKey={tab}
-        onChange={k => setTab(k as TabKey)}
-        items={tabItems}
-        size="small"
-      />
+      {!hideTabs && (
+        <Tabs
+          activeKey={tab}
+          onChange={k => setTab(k as TabKey)}
+          items={tabItems}
+          size="small"
+        />
+      )}
 
       {tab === 'posts' && (
         <>

@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../common/db');
 const redis = require('../common/redis');
-const { signToken, signRefreshToken } = require('../common/authMiddleware');
+const { signToken, signRefreshToken, JWT_SECRET } = require('../common/authMiddleware');
 const { sendVerificationCode } = require('./emailService');
 
 // ─────────────────────────────────────────────────────────────
@@ -286,10 +286,7 @@ async function findOrCreateGoogleUser({ googleId, email, displayName, avatarUrl 
 async function refreshAccessToken(refreshToken) {
   let payload;
   try {
-    payload = jwt.verify(
-      refreshToken,
-      process.env.JWT_SECRET || 'booksocial_dev_secret_change_in_prod'
-    );
+    payload = jwt.verify(refreshToken, JWT_SECRET);
   } catch {
     throw { status: 401, message: 'Refresh Token 无效或已过期，请重新登录' };
   }

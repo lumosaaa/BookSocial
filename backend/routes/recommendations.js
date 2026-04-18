@@ -13,13 +13,14 @@ router.get('/books', optionalAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
     const limit  = Math.min(parseInt(req.query.limit) || 20, 40);
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
 
     let books;
     if (userId) {
-      books = await recommendService.getRecommendedBooks(userId, limit);
+      books = await recommendService.getRecommendedBooks(userId, limit, offset);
     } else {
       // 未登录：返回热门榜
-      books = await recommendService.getHotBooks(limit);
+      books = await recommendService.getHotBooks(limit, offset);
     }
 
     res.ok(books);
@@ -34,8 +35,9 @@ router.get('/friends', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit  = Math.min(parseInt(req.query.limit) || 10, 20);
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
 
-    const friends = await recommendService.getRecommendedFriends(userId, limit);
+    const friends = await recommendService.getRecommendedFriends(userId, limit, offset);
     res.ok(friends);
   } catch (err) {
     console.error('[M6] /recommendations/friends 错误:', err);
@@ -47,7 +49,8 @@ router.get('/friends', authMiddleware, async (req, res) => {
 router.get('/hot', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 20, 50);
-    const books = await recommendService.getHotBooks(limit);
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
+    const books = await recommendService.getHotBooks(limit, offset);
     res.ok(books);
   } catch (err) {
     console.error('[M6] /recommendations/hot 错误:', err);
@@ -72,32 +75,6 @@ router.post('/feedback', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('[M6] /recommendations/feedback 错误:', err);
     res.fail('反馈提交失败', 500);
-  }
-});
-
-// GET /api/v1/users/:id/interest-profile — 用户兴趣画像
-router.get('/../users/:id/interest-profile', optionalAuth, async (req, res) => {
-  try {
-    const targetId = parseInt(req.params.id);
-    if (!targetId) return res.fail('用户ID无效', 400);
-
-    // 仅本人或公开设置可查看
-    if (req.user?.id !== targetId) {
-      const db = require('../common/db');
-      const [privRows] = await db.query(
-        'SELECT profile_visible FROM user_privacy_settings WHERE user_id = ?',
-        [targetId]
-      );
-      if (privRows[0]?.profile_visible === 2) {
-        return res.fail('用户已设置隐私', 403);
-      }
-    }
-
-    const profile = await recommendService.getUserInterestProfile(targetId);
-    res.ok(profile);
-  } catch (err) {
-    console.error('[M6] /interest-profile 错误:', err);
-    res.fail('获取兴趣画像失败', 500);
   }
 });
 

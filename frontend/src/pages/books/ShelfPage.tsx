@@ -178,7 +178,7 @@ const ShelfPage: React.FC = () => {
           >
             <Button
               type="primary"
-              onClick={() => navigate('/books')}
+              onClick={() => navigate('/search')}
               style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)', borderRadius: 16 }}
             >
               去搜索书籍

@@ -79,7 +79,7 @@ async function getPostById(postId, viewerId = null) {
       `SELECT p.id, p.content, p.post_type AS postType, p.is_deleted AS isDeleted,
               u.id AS userId, u.username, u.avatar_url AS avatarUrl
        FROM posts p JOIN users u ON u.id = p.user_id
-       WHERE p.id = ?`,
+       WHERE p.id = ? AND p.is_deleted = 0`,
       [post.originPostId]
     );
     post.originPost = orig[0] || null;
@@ -349,7 +349,7 @@ async function createPost(userId, body) {
 /**
  * 删除帖子（软删除）
  */
-async function deletePost(postId, userId) {
+async function deletePost(postId, userId, deleteReason = 0) {
   const [rows] = await db.query(
     'SELECT id, user_id FROM posts WHERE id = ? AND is_deleted = 0',
     [postId]
@@ -367,8 +367,8 @@ async function deletePost(postId, userId) {
 
   await db.transaction(async (conn) => {
     await conn.query(
-      'UPDATE posts SET is_deleted=1, delete_reason=0 WHERE id=?',
-      [postId]
+      'UPDATE posts SET is_deleted=1, delete_reason=? WHERE id=?',
+      [deleteReason, postId]
     );
     await conn.query(
       'UPDATE users SET post_count = GREATEST(post_count-1, 0) WHERE id=?',

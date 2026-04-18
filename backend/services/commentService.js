@@ -35,6 +35,16 @@ function formatComment(row) {
  * 获取帖子根评论列表（第一层），每条附带前3条子评论预览
  */
 async function getPostComments(postId, viewerId, page = 1, pageSize = 10) {
+  const [[post]] = await db.query(
+    'SELECT id FROM posts WHERE id=? AND is_deleted=0',
+    [postId]
+  );
+  if (!post) {
+    const err = new Error('帖子不存在');
+    err.statusCode = 404;
+    throw err;
+  }
+
   const offset = (page - 1) * pageSize;
 
   const [rows] = await db.query(
@@ -139,7 +149,9 @@ async function createComment(userId, body) {
   }
 
   // 确认目标存在
-  const targetTableMap = { 1: 'posts', 2: 'reading_notes', 3: 'posts', 4: 'group_posts' };
+  //   1=帖子, 2=阅读笔记, 4=小组帖子
+  //   注意：通知里的 type=3 是"被评论/被回复"这一事件类型，与这里的 targetType 概念不同，不要混用
+  const targetTableMap = { 1: 'posts', 2: 'reading_notes', 4: 'group_posts' };
   const targetTable = targetTableMap[targetType];
   if (!targetTable) {
     const err = new Error('不支持的评论目标类型');
@@ -193,9 +205,12 @@ async function createComment(userId, body) {
       await conn.query('UPDATE reading_notes SET comment_count = comment_count+1 WHERE id=?', [targetId]);
     }
 
-    // 若是回复，更新父评论的 reply_count
+    // 若是回复，更新根评论和直接父评论的 reply_count
     if (parentId) {
-      await conn.query('UPDATE comments SET reply_count = reply_count+1 WHERE id=?', [rootId]);
+      if (rootId && rootId !== parentId) {
+        await conn.query('UPDATE comments SET reply_count = reply_count+1 WHERE id=?', [rootId]);
+      }
+      await conn.query('UPDATE comments SET reply_count = reply_count+1 WHERE id=?', [parentId]);
     }
   });
 
@@ -273,6 +288,12 @@ async function deleteComment(commentId, userId) {
       await conn.query(
         'UPDATE comments SET reply_count = GREATEST(reply_count-1,0) WHERE id=?',
         [comment.root_id]
+      );
+    }
+    if (comment.parent_id) {
+      await conn.query(
+        'UPDATE comments SET reply_count = GREATEST(reply_count-1,0) WHERE id=?',
+        [comment.parent_id]
       );
     }
   });

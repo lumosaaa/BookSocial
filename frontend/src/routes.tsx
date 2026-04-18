@@ -121,6 +121,10 @@ const router = createBrowserRouter([
         path: '/shelf',
         element: lazyPage(() => import('./pages/books/ShelfPage')),
       },
+      {
+        path: '/categories',
+        element: lazyPage(() => import('./pages/books/CategoryListPage')),
+      },
 
       // ── 发现 / 推荐（模块6）────────────────────────────────
       {
@@ -156,7 +160,7 @@ const router = createBrowserRouter([
         element: lazyPage(() => import('./pages/messages/ConversationsPage')),
       },
       {
-        path: '/messages/:userId',
+        path: '/messages/:id',
         element: lazyPage(() => import('./pages/messages/ChatPage')),
       },
 
@@ -204,10 +208,19 @@ const router = createBrowserRouter([
         element: lazyPage(() => import('./pages/groups/GroupDetailPage')),
       },
       {
+        path: '/groups/:id/chat',
+        element: lazyPage(() => import('./pages/groups/GroupChatPage')),
+      },
+      {
         path: '/challenges/:id',
         element: lazyPage(() => import('./pages/groups/ChallengePage')),
       },
     ],
+  },
+
+  {
+    path: '/categories/:id',
+    element: lazyPage(() => import('./pages/books/CategoryDetailPage')),
   },
 
   // ── 404：未匹配路由重定向到首页 ──────────────────────────────

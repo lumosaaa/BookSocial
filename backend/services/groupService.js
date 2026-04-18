@@ -6,6 +6,15 @@ const axios = require('axios');
 
 const MAX_GROUPS_PER_USER = 20; // 每人最多加入20个小组
 
+/**
+ * 将调用方传入的当前用户 ID 规范化为正整数；不合法则返回 null
+ * 使用 Number.isInteger 避免 NaN / 负数被拼入 SQL
+ */
+function normalizeUserId(userId) {
+  const n = Number(userId);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 // ── 格式化函数 ─────────────────────────────────────────────────────────────────
 function formatGroup(row) {
   if (!row) return null;
@@ -74,6 +83,7 @@ function formatChallenge(row) {
 async function listGroups({ q, categoryId, page, currentUserId }) {
   const pageSize = 20;
   const offset   = (page - 1) * pageSize;
+  const myId     = normalizeUserId(currentUserId);
   const params   = [];
   let whereClause = 'WHERE bg.status = 1 ';
 
@@ -86,10 +96,12 @@ async function listGroups({ q, categoryId, page, currentUserId }) {
     params.push(categoryId);
   }
 
-  const myRoleJoin = currentUserId
-    ? `LEFT JOIN group_members gm_me ON gm_me.group_id = bg.id AND gm_me.user_id = ${Number(currentUserId)}`
+  const joinParams = [];
+  const myRoleJoin = myId
+    ? 'LEFT JOIN group_members gm_me ON gm_me.group_id = bg.id AND gm_me.user_id = ?'
     : '';
-  const myRoleSelect = currentUserId ? ', gm_me.role AS my_role' : ', NULL AS my_role';
+  if (myId) joinParams.push(myId);
+  const myRoleSelect = myId ? ', gm_me.role AS my_role' : ', NULL AS my_role';
 
   const sql = `
     SELECT bg.*, u.username AS creator_name, u.avatar_url AS creator_avatar,
@@ -102,17 +114,12 @@ async function listGroups({ q, categoryId, page, currentUserId }) {
     ORDER BY bg.member_count DESC, bg.created_at DESC
     LIMIT ? OFFSET ?
   `;
-  params.push(pageSize, offset);
 
-  const countSql = `SELECT COUNT(*) AS total FROM book_groups bg ${whereClause.replace(/\?/g, () => {
-    // count query uses same params except limit/offset
-    return '?';
-  })}`;
-
-  const [rows]  = await db.query(sql, params);
+  const listParams = [...joinParams, ...params, pageSize, offset];
+  const [rows] = await db.query(sql, listParams);
   const [countRows] = await db.query(
     `SELECT COUNT(*) AS total FROM book_groups bg ${whereClause}`,
-    params.slice(0, params.length - 2)
+    params
   );
 
   return {
@@ -157,10 +164,12 @@ async function createGroup({ creatorId, name, description, coverUrl, categoryId,
 
 // ── 小组详情 ──────────────────────────────────────────────────────────────────
 async function getGroupDetail({ groupId, currentUserId }) {
-  const myRoleJoin = currentUserId
-    ? `LEFT JOIN group_members gm_me ON gm_me.group_id = bg.id AND gm_me.user_id = ${Number(currentUserId)}`
+  const myId = normalizeUserId(currentUserId);
+  const myRoleJoin = myId
+    ? 'LEFT JOIN group_members gm_me ON gm_me.group_id = bg.id AND gm_me.user_id = ?'
     : '';
-  const myRoleSelect = currentUserId ? ', gm_me.role AS my_role' : ', NULL AS my_role';
+  const myRoleSelect = myId ? ', gm_me.role AS my_role' : ', NULL AS my_role';
+  const params = myId ? [myId, groupId] : [groupId];
 
   const [rows] = await db.query(
     `SELECT bg.*, u.username AS creator_name, u.avatar_url AS creator_avatar,
@@ -170,7 +179,7 @@ async function getGroupDetail({ groupId, currentUserId }) {
      LEFT JOIN book_categories bc ON bc.id = bg.category_id
      ${myRoleJoin}
      WHERE bg.id = ?`,
-    [groupId]
+    params
   );
   return rows.length ? formatGroup(rows[0]) : null;
 }
@@ -363,22 +372,27 @@ async function listGroupPosts({ groupId, page, currentUserId }) {
   await checkGroupExists(groupId);
   const pageSize = 20;
   const offset   = (page - 1) * pageSize;
-  const likedJoin = currentUserId
-    ? `LEFT JOIN likes lk ON lk.target_id = gp.id AND lk.target_type = 6 AND lk.user_id = ${Number(currentUserId)}`
+  const myId     = normalizeUserId(currentUserId);
+  const likedJoin = myId
+    ? 'LEFT JOIN likes lk ON lk.target_id = gp.id AND lk.target_type = 6 AND lk.user_id = ?'
     : '';
-  const likedSelect = currentUserId ? ', IF(lk.id IS NOT NULL, 1, 0) AS is_liked' : ', 0 AS is_liked';
+  const likedSelect = myId ? ', IF(lk.id IS NOT NULL, 1, 0) AS is_liked' : ', 0 AS is_liked';
+  const params = myId ? [myId, groupId, pageSize, offset] : [groupId, pageSize, offset];
 
   const [rows] = await db.query(
     `SELECT gp.*, u.username, u.avatar_url ${likedSelect}
      FROM group_posts gp
      JOIN users u ON u.id = gp.user_id
      ${likedJoin}
-     WHERE gp.group_id = ?
+     WHERE gp.group_id = ? AND gp.is_deleted = 0
      ORDER BY gp.created_at DESC
      LIMIT ? OFFSET ?`,
-    [groupId, pageSize, offset]
+    params
   );
-  const [cnt] = await db.query('SELECT COUNT(*) AS total FROM group_posts WHERE group_id = ?', [groupId]);
+  const [cnt] = await db.query(
+    'SELECT COUNT(*) AS total FROM group_posts WHERE group_id = ? AND is_deleted = 0',
+    [groupId]
+  );
 
   return { list: rows.map(formatGroupPost), total: cnt[0].total };
 }
@@ -483,17 +497,22 @@ async function createChallenge({ groupId, creatorId, title, description, bookId,
 async function listChallenges({ groupId, page, status, currentUserId }) {
   const pageSize = 10;
   const offset   = (page - 1) * pageSize;
-  const params   = [groupId];
+  const myId     = normalizeUserId(currentUserId);
+  const whereParams = [groupId];
   let where = 'WHERE rc.group_id = ?';
   if (status === 'active') { where += ' AND rc.deadline >= NOW()'; }
   if (status === 'ended')  { where += ' AND rc.deadline < NOW()'; }
 
-  const myJoin = currentUserId
-    ? `LEFT JOIN challenge_participants cp_me ON cp_me.challenge_id = rc.id AND cp_me.user_id = ${Number(currentUserId)}`
+  const myJoin = myId
+    ? 'LEFT JOIN challenge_participants cp_me ON cp_me.challenge_id = rc.id AND cp_me.user_id = ?'
     : '';
-  const mySelect = currentUserId
+  const mySelect = myId
     ? ', cp_me.checkin_count AS my_checkin_count, cp_me.last_checkin_at AS my_last_checkin, IF(cp_me.id IS NOT NULL, 1, 0) AS is_participating'
     : ', 0 AS my_checkin_count, NULL AS my_last_checkin, 0 AS is_participating';
+
+  const listParams = myId
+    ? [myId, ...whereParams, pageSize, offset]
+    : [...whereParams, pageSize, offset];
 
   const [rows] = await db.query(
     `SELECT rc.*, u.username AS creator_name, b.title AS book_title, b.cover_url AS book_cover,
@@ -506,11 +525,11 @@ async function listChallenges({ groupId, page, status, currentUserId }) {
      ${where}
      ORDER BY rc.created_at DESC
      LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset]
+    listParams
   );
   const [cnt] = await db.query(
     `SELECT COUNT(*) AS total FROM reading_challenges rc ${where}`,
-    params
+    whereParams
   );
 
   return { list: rows.map(formatChallenge), total: cnt[0].total };

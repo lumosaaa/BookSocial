@@ -23,25 +23,25 @@ const TTL = {
  * @param {number} limit
  * @returns {Promise<Array>}
  */
-async function getRecommendedBooks(userId, limit = 20) {
+async function getRecommendedBooks(userId, limit = 20, offset = 0) {
   const cacheKey = `rec:books:${userId}`;
 
   // 1. 命中缓存直接返回
   const cached = await redis.get(cacheKey);
   if (cached) {
-    const ids = cached;
-    return fetchBooksDetail(ids.slice(0, limit));
+    const ids = Array.isArray(cached) ? cached : JSON.parse(cached);
+    return fetchBooksDetail(ids.slice(offset, offset + limit));
   }
 
   // 2. 实时计算（User-CF + Tag-Based 混合）
-  const bookIds = await computeBookRecommendations(userId, 40);
+  const bookIds = await computeBookRecommendations(userId, Math.max(40, offset + limit + 16));
 
   // 3. 写 Redis 缓存
   if (bookIds.length > 0) {
     await redis.set(cacheKey, JSON.stringify(bookIds), TTL.REC_BOOKS);
   }
 
-  return fetchBooksDetail(bookIds.slice(0, limit));
+  return fetchBooksDetail(bookIds.slice(offset, offset + limit));
 }
 
 /**
@@ -164,22 +164,22 @@ async function fetchBooksDetail(ids) {
  * @param {number} userId
  * @param {number} limit
  */
-async function getRecommendedFriends(userId, limit = 10) {
+async function getRecommendedFriends(userId, limit = 10, offset = 0) {
   const cacheKey = `rec:friends:${userId}`;
 
   const cached = await redis.get(cacheKey);
   if (cached) {
-    const ids = cached;
-    return fetchUsersDetail(ids.slice(0, limit), userId);
+    const ids = Array.isArray(cached) ? cached : JSON.parse(cached);
+    return fetchUsersDetail(ids.slice(offset, offset + limit), userId);
   }
 
-  const userIds = await computeFriendRecommendations(userId, 30);
+  const userIds = await computeFriendRecommendations(userId, Math.max(30, offset + limit + 8));
 
   if (userIds.length > 0) {
     await redis.set(cacheKey, JSON.stringify(userIds), TTL.REC_FRIENDS);
   }
 
-  return fetchUsersDetail(userIds.slice(0, limit), userId);
+  return fetchUsersDetail(userIds.slice(offset, offset + limit), userId);
 }
 
 /**
@@ -255,21 +255,22 @@ async function fetchUsersDetail(ids, currentUserId) {
  * 获取热门书籍榜（先查 Redis）
  * @param {number} limit
  */
-async function getHotBooks(limit = 20) {
+async function getHotBooks(limit = 20, offset = 0) {
   const cacheKey = 'hot:books';
 
   const cached = await redis.get(cacheKey);
   if (cached) {
-    return cached.slice(0, limit);
+    const books = Array.isArray(cached) ? cached : JSON.parse(cached);
+    return books.slice(offset, offset + limit);
   }
 
-  const books = await computeHotBooks(limit);
+  const books = await computeHotBooks(Math.max(limit + offset, 24));
 
   if (books.length > 0) {
     await redis.set(cacheKey, JSON.stringify(books), TTL.HOT_BOOKS);
   }
 
-  return books;
+  return books.slice(offset, offset + limit);
 }
 
 /**

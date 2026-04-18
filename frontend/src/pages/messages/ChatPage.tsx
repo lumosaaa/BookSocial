@@ -53,7 +53,7 @@ interface BubbleProps {
   onRecall: (id: number) => void;
 }
 
-function Bubble({ msg, isMine, canRecall, onRecall }: BubbleProps) {
+function Bubble({ msg, isMine, canRecall, onRecall, showAvatar }: BubbleProps & { showAvatar: boolean }) {
   const menuItems: MenuProps['items'] = canRecall
     ? [{ key: 'recall', label: '撤回', icon: <RollbackOutlined />, danger: true }]
     : [];
@@ -108,14 +108,18 @@ function Bubble({ msg, isMine, canRecall, onRecall }: BubbleProps) {
       alignItems: 'flex-end',
       gap: 8,
     }}>
-      {/* 头像 */}
-      <Avatar
-        size={36}
-        src={msg.senderAvatar || undefined}
-        style={{ background: '#4A6741', flexShrink: 0, alignSelf: 'flex-end' }}
-      >
-        {msg.senderName[0]?.toUpperCase()}
-      </Avatar>
+      {/* 头像（连续同发送者隐藏，只保留占位宽度以对齐） */}
+      {showAvatar ? (
+        <Avatar
+          size={36}
+          src={msg.senderAvatar || undefined}
+          style={{ background: '#4A6741', flexShrink: 0, alignSelf: 'flex-end' }}
+        >
+          {msg.senderName[0]?.toUpperCase()}
+        </Avatar>
+      ) : (
+        <div style={{ width: 36, flexShrink: 0 }} />
+      )}
 
       {/* 气泡 + 时间 */}
       <div style={{
@@ -165,6 +169,15 @@ export default function ChatPage() {
   const clearNewMessages = useSocketStore((s) => s.clearNewMessages);
   const sendSocketMsg    = useSocketStore((s) => s.sendMessage);
   const recallSocketMsg  = useSocketStore((s) => s.recallMessage);
+  const emitTyping       = useSocketStore((s) => s.emitTyping);
+  const markRead         = useSocketStore((s) => s.markRead);
+  const onlineUserIds    = useSocketStore((s) => s.onlineUserIds);
+  const typingConversations = useSocketStore((s) => s.typingConversations);
+
+  const [peerId, setPeerId] = useState<number | null>(null);
+  const isPeerOnline = peerId ? onlineUserIds.has(peerId) : false;
+  const peerTyping = Boolean(typingConversations[convId]);
+  const typingTimerRef = useRef<number | null>(null);
 
   // ── 加载消息（首次 or 加载更多） ─────────────────────────────────────────
   const loadMessages = useCallback(async (pg: number, prepend = false) => {
@@ -190,16 +203,18 @@ export default function ChatPage() {
       setPage(pg);
 
       // 推断对方姓名（取第一条不是自己发的消息的 senderName）
-      if (!peerName) {
-        const peerMsg = data.list.find((m) => m.senderId !== user?.id);
-        if (peerMsg) setPeerName(peerMsg.senderName);
+      const peerMsg = data.list.find((m) => m.senderId !== user?.id);
+      if (peerMsg) {
+        if (!peerName) setPeerName(peerMsg.senderName);
+        setPeerId(Number(peerMsg.senderId));
       }
+      markRead(convId);
     } catch (err: any) {
       antMsg.error(err.message || '加载消息失败');
     } finally {
       setLoading(false);
     }
-  }, [convId, user?.id, peerName]);
+  }, [convId, user?.id, peerName, markRead]);
 
   // ── 初始化 ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -342,32 +357,43 @@ export default function ChatPage() {
           onClick={() => navigate('/messages')}
           style={{ color: '#666', padding: '0 4px' }}
         />
-        <span style={{ fontWeight: 600, fontSize: 16, color: '#333', flex: 1 }}>
+        <span style={{ fontWeight: 600, fontSize: 16, color: '#333', flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
           {peerName || '私信'}
+          {peerId && (
+            <span
+              style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: isPeerOnline ? '#52c41a' : '#d9d9d9',
+              }}
+              title={isPeerOnline ? '在线' : '离线'}
+            />
+          )}
         </span>
       </div>
 
       {/* ── 消息区 ── */}
       <div
         ref={chatRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (el.scrollTop < 60 && hasMore && !loading) {
+            loadMessages(page + 1, true);
+          }
+        }}
         style={{
           flex: 1, overflowY: 'auto',
           padding: '16px 20px',
-          display: 'flex', flexDirection: 'column', gap: 12,
+          display: 'flex', flexDirection: 'column', gap: 8,
           background: '#f7f9f7',
         }}
       >
-        {/* 加载更多 */}
-        {hasMore && (
+        {/* 顶部加载指示 */}
+        {hasMore && loading && page > 1 && (
           <div style={{ textAlign: 'center' }}>
-            <Button
-              size="small" type="text"
-              loading={loading && page > 1}
-              onClick={() => loadMessages(page + 1, true)}
-              style={{ color: '#4A6741', fontSize: 12 }}
-            >
-              加载更早的消息
-            </Button>
+            <Spin size="small" />
           </div>
         )}
 
@@ -391,6 +417,8 @@ export default function ChatPage() {
 
           // 日期标签：与上一条消息不同天时显示
           const showDay = idx === 0 || !sameDay(messages[idx - 1].createdAt, msg.createdAt);
+          const prev = idx > 0 ? messages[idx - 1] : null;
+          const showAvatar = !prev || prev.senderId !== msg.senderId || showDay;
 
           return (
             <Fragment key={msg.id}>
@@ -409,6 +437,7 @@ export default function ChatPage() {
                 isMine={isMine}
                 canRecall={canRecall}
                 onRecall={handleRecall}
+                showAvatar={showAvatar}
               />
             </Fragment>
           );
@@ -423,32 +452,47 @@ export default function ChatPage() {
         padding: '10px 16px 12px',
         borderTop: '1px solid #f0f0f0',
         background: '#fff', flexShrink: 0,
-        display: 'flex', gap: 8, alignItems: 'flex-end',
       }}>
-        <Input.TextArea
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onPressEnter={(e) => {
-            if (!e.shiftKey) { e.preventDefault(); handleSend(); }
-          }}
-          placeholder="发消息…（Enter 发送，Shift+Enter 换行）"
-          autoSize={{ minRows: 1, maxRows: 5 }}
-          style={{ flex: 1, borderRadius: 20, resize: 'none', fontSize: 14 }}
-          disabled={sending}
-        />
-        <Button
-          type="primary"
-          icon={<SendOutlined />}
-          onClick={handleSend}
-          loading={sending}
-          disabled={!inputText.trim()}
-          style={{
-            background: '#4A6741', borderColor: '#4A6741',
-            borderRadius: 20, height: 36, padding: '0 16px',
-          }}
-        >
-          发送
-        </Button>
+        {peerTyping && (
+          <div style={{ fontSize: 12, color: '#52c41a', paddingBottom: 4 }}>
+            对方正在输入…
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <Input.TextArea
+            value={inputText}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              if (typingTimerRef.current) {
+                window.clearTimeout(typingTimerRef.current);
+              }
+              emitTyping(convId);
+              typingTimerRef.current = window.setTimeout(() => {
+                typingTimerRef.current = null;
+              }, 1500);
+            }}
+            onPressEnter={(e) => {
+              if (!e.shiftKey) { e.preventDefault(); handleSend(); }
+            }}
+            placeholder="发消息…（Enter 发送，Shift+Enter 换行）"
+            autoSize={{ minRows: 1, maxRows: 5 }}
+            style={{ flex: 1, borderRadius: 20, resize: 'none', fontSize: 14 }}
+            disabled={sending}
+          />
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            onClick={handleSend}
+            loading={sending}
+            disabled={!inputText.trim()}
+            style={{
+              background: '#4A6741', borderColor: '#4A6741',
+              borderRadius: 20, height: 36, padding: '0 16px',
+            }}
+          >
+            发送
+          </Button>
+        </div>
       </div>
     </div>
   );

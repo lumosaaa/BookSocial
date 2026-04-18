@@ -88,7 +88,7 @@ function FriendRecommendCard({
   const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isLoggedIn) {
-      navigate('/auth/login');
+      navigate('/login');
       return;
     }
     setLoading(true);
@@ -206,6 +206,11 @@ export default function DiscoverPage() {
     } catch {/* 静默 */}
   };
 
+  // 热门榜的 dismiss：只把卡片从当前视图移除，不上报反馈（热门是全站榜单）
+  const dismissHotBook = (bookId: number) => {
+    setHotBooks(prev => prev.filter(b => b.id !== bookId));
+  };
+
   const dismissFriend = async (userId: number) => {
     setFriends(prev => prev.filter(f => f.id !== userId));
     try {
@@ -279,7 +284,7 @@ export default function DiscoverPage() {
               {hotBooks.map((b, idx) => (
                 <div key={b.id} className="hot-rank-wrapper">
                   <span className={`rank-badge ${idx < 3 ? 'rank-top' : ''}`}>{idx + 1}</span>
-                  <BookRecommendCard book={b} onDismiss={() => {}} />
+                  <BookRecommendCard book={b} onDismiss={dismissHotBook} />
                 </div>
               ))}
             </div>

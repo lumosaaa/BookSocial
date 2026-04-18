@@ -5,9 +5,12 @@ import {
   Avatar, Button, Tabs, Spin, Statistic,
   Row, Col, message, Tag, Result,
 } from 'antd';
-import { UserOutlined, MessageOutlined, PlusOutlined, CheckOutlined } from '@ant-design/icons';
+import { UserOutlined, MessageOutlined } from '@ant-design/icons';
 import { userApi } from '../../api/authApi';
+import { getOrCreateConversation } from '../../api/messageApi';
 import { useAuthStore } from '../../store/authStore';
+import UserPostsPage from '../social/UserPostsPage';
+import FollowButton from '../../components/FollowButton';
 
 interface Profile {
   id: number;
@@ -35,7 +38,24 @@ export default function UserProfilePage() {
   const [notFound, setNotFound]         = useState(false);
   const [following, setFollowing]       = useState(false);
   const [isMutual, setIsMutual]         = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
+
+  const openConversation = async () => {
+    if (!profile) return;
+    if (!isLoggedIn) {
+      message.info('请先登录');
+      return navigate('/login');
+    }
+    setMessageLoading(true);
+    try {
+      const conv = await getOrCreateConversation(profile.id);
+      navigate(`/messages/${conv.id}`);
+    } catch (err: any) {
+      message.warning(err?.response?.data?.message || '对方暂不接受私信');
+    } finally {
+      setMessageLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -58,38 +78,14 @@ export default function UserProfilePage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const handleFollowToggle = async () => {
-    if (!isLoggedIn) {
-      message.info('请先登录');
-      return navigate('/login');
-    }
-    if (!profile) return;
-    setFollowLoading(true);
-    try {
-      const { data } = await userApi.toggleFollow(profile.id);
-      const { isFollowing: newFollowing, isMutual: newMutual } = data.data;
-      setFollowing(newFollowing);
-      setIsMutual(newMutual);
-      setProfile((prev) =>
-        prev
-          ? {
-              ...prev,
-              followerCount: prev.followerCount + (newFollowing ? 1 : -1),
-              isMutual: newMutual,
-              isFollowing: newFollowing,
-            }
-          : null
-      );
-      if (newFollowing) {
-        message.success(newMutual ? '互相关注成为书友！' : '关注成功');
-      } else {
-        message.success('已取消关注');
-      }
-    } catch {
-      message.error('操作失败，请重试');
-    } finally {
-      setFollowLoading(false);
-    }
+  const handleFollowChange = (newFollowing: boolean, newMutual: boolean, followerCount: number) => {
+    setFollowing(newFollowing);
+    setIsMutual(newMutual);
+    setProfile((prev) =>
+      prev
+        ? { ...prev, followerCount, isMutual: newMutual, isFollowing: newFollowing }
+        : prev,
+    );
   };
 
   if (loading) {
@@ -158,33 +154,20 @@ export default function UserProfilePage() {
           {/* 操作按钮（非本人才显示） */}
           {!isOwnProfile && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingBottom: 8 }}>
-              {isMutual && (
-                <Button
-                  icon={<MessageOutlined />}
-                  onClick={() => navigate(`/messages?userId=${profile.id}`)}
-                  style={{ borderRadius: 20 }}
-                >
-                  私信
-                </Button>
-              )}
               <Button
-                type={following ? 'default' : 'primary'}
-                loading={followLoading}
-                icon={following ? <CheckOutlined /> : <PlusOutlined />}
-                onClick={handleFollowToggle}
-                style={{
-                  borderRadius: 20,
-                  minWidth: 88,
-                  ...(following
-                    ? { color: 'var(--color-text-secondary)' }
-                    : {
-                        background: 'var(--color-primary)',
-                        borderColor: 'var(--color-primary)',
-                      }),
-                }}
+                icon={<MessageOutlined />}
+                loading={messageLoading}
+                onClick={openConversation}
+                style={{ borderRadius: 20 }}
               >
-                {following ? (isMutual ? '书友' : '已关注') : '关注'}
+                私信
               </Button>
+              <FollowButton
+                userId={profile.id}
+                initialFollowed={following}
+                isMutual={isMutual}
+                onToggle={handleFollowChange}
+              />
             </div>
           )}
 
@@ -266,12 +249,7 @@ export default function UserProfilePage() {
           {
             key: 'posts',
             label: '动态',
-            children: (
-              <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-                <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 12 }}>📝</div>
-                <div>暂无公开动态</div>
-              </div>
-            ),
+            children: <UserPostsPage userId={profile.id} initialTab="posts" hideTabs />,
           },
           {
             key: 'shelf',
@@ -286,12 +264,7 @@ export default function UserProfilePage() {
           {
             key: 'notes',
             label: '笔记',
-            children: (
-              <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-                <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 12 }}>📒</div>
-                <div>暂无公开笔记</div>
-              </div>
-            ),
+            children: <UserPostsPage userId={profile.id} initialTab="notes" hideTabs />,
           },
         ]}
       />

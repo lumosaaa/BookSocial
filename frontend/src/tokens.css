@@ -88,10 +88,15 @@
   --shadow-google: 0 1px 3px rgba(0, 0, 0, 0.12);
 
   /* ─── 布局系统 ──────────────────────────────────────────────── */
-  --layout-sidebar-width:  220px;
-  --layout-content-max:    720px;
-  --layout-panel-width:    300px;
-  --layout-header-height:  60px;
+  --layout-sidebar-width:           220px;
+  --layout-sidebar-width-collapsed:  64px;
+  /* 运行时覆盖：Layout 根据收缩状态写入具体像素 */
+  --layout-sidebar-current:        var(--layout-sidebar-width);
+  --layout-content-max:           1200px;
+  --layout-panel-width:            300px;
+  --layout-panel-width-collapsed:   56px;
+  --layout-panel-current:          var(--layout-panel-width);
+  --layout-header-height:           60px;
 
   /* ─── 动画 ──────────────────────────────────────────────────── */
   --transition-fast:   150ms ease;

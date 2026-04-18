@@ -60,7 +60,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
 // DELETE /api/v1/posts/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    await postService.deletePost(+req.params.id, req.user.id);
+    const deleteReason = req.body?.reason !== undefined ? Number(req.body.reason) : 0;
+    if (![0, 1, 2].includes(deleteReason)) {
+      return res.fail('删除原因无效', 400);
+    }
+
+    await postService.deletePost(+req.params.id, req.user.id, deleteReason);
     res.ok(null);
   } catch (err) {
     res.fail(err.message, err.statusCode || 500);

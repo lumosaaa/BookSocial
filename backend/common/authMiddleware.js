@@ -8,7 +8,11 @@ const jwt = require('jsonwebtoken');
 const { error } = require('./response');
 const db = require('./db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'booksocial_dev_secret_change_in_prod';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  // 生产/开发都必须显式配置；缺失则直接阻断启动，避免使用可预测的默认密钥
+  throw new Error('[auth] 环境变量 JWT_SECRET 未配置，拒绝启动');
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '30d';
 
@@ -131,4 +135,5 @@ module.exports = {
   requireGroupRole,
   signToken,
   signRefreshToken,
+  JWT_SECRET,
 };

@@ -11,6 +11,7 @@ import {
   PushpinOutlined,
   RightOutlined,
   SkinOutlined,
+  ColumnWidthOutlined,
 } from '@ant-design/icons';
 import {
   Button,
@@ -39,10 +40,12 @@ import { useAuthStore } from '../../store/authStore';
 const SETTINGS_STORAGE_KEY = 'bs-reader-settings';
 
 type ReaderTheme = 'light' | 'sepia' | 'dark';
+type ColumnMode = 'single' | 'dual';
 
 interface ReaderSettings {
   theme: ReaderTheme;
   fontSize: number;
+  columnMode: ColumnMode;
 }
 
 const THEME_PRESETS: Record<ReaderTheme, { shell: string; card: string; text: string; muted: string; border: string }> = {
@@ -71,19 +74,20 @@ const THEME_PRESETS: Record<ReaderTheme, { shell: string; card: string; text: st
 
 function loadSettings(): ReaderSettings {
   if (typeof window === 'undefined') {
-    return { theme: 'light', fontSize: 18 };
+    return { theme: 'light', fontSize: 18, columnMode: 'single' };
   }
 
   try {
     const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return { theme: 'light', fontSize: 18 };
+    if (!raw) return { theme: 'light', fontSize: 18, columnMode: 'single' };
     const parsed = JSON.parse(raw) as Partial<ReaderSettings>;
     return {
       theme: parsed.theme === 'sepia' || parsed.theme === 'dark' ? parsed.theme : 'light',
       fontSize: clampFontSize(parsed.fontSize),
+      columnMode: parsed.columnMode === 'dual' ? 'dual' : 'single',
     };
   } catch {
-    return { theme: 'light', fontSize: 18 };
+    return { theme: 'light', fontSize: 18, columnMode: 'single' };
   }
 }
 
@@ -92,10 +96,11 @@ function clampFontSize(fontSize?: number): number {
   return Math.min(28, Math.max(14, size));
 }
 
-function estimateCharsPerPage(fontSize: number, viewportWidth: number): number {
+function estimateCharsPerPage(fontSize: number, viewportWidth: number, columnMode: ColumnMode): number {
   const widthFactor = viewportWidth < 640 ? 0.56 : viewportWidth < 900 ? 0.78 : 1;
   const fontFactor = Math.pow(18 / fontSize, 1.18);
-  return Math.max(320, Math.round(1080 * widthFactor * fontFactor));
+  const base = Math.max(320, Math.round(1080 * widthFactor * fontFactor));
+  return columnMode === 'dual' ? base * 2 : base;
 }
 
 function takeChunk(text: string, maxChars: number): string {
@@ -106,7 +111,7 @@ function takeChunk(text: string, maxChars: number): string {
   return slice.slice(0, (cut ?? maxChars)).trim();
 }
 
-function paginateContent(content: string, fontSize: number, viewportWidth: number): string[] {
+function paginateContent(content: string, fontSize: number, viewportWidth: number, columnMode: ColumnMode): string[] {
   const normalized = content
     .replace(/\r\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -119,7 +124,7 @@ function paginateContent(content: string, fontSize: number, viewportWidth: numbe
     .map(part => part.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
-  const pageSize = estimateCharsPerPage(fontSize, viewportWidth);
+  const pageSize = estimateCharsPerPage(fontSize, viewportWidth, columnMode);
   const pages: string[] = [];
   let current = '';
 
@@ -180,7 +185,12 @@ const ReaderPage: React.FC = () => {
   const initialSettings = useMemo(() => loadSettings(), []);
   const [theme, setTheme] = useState<ReaderTheme>(initialSettings.theme);
   const [fontSize, setFontSize] = useState(initialSettings.fontSize);
+  const [columnMode, setColumnMode] = useState<ColumnMode>(initialSettings.columnMode);
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 1024 : window.innerWidth));
+
+  const dualEnabled = columnMode === 'dual' && viewportWidth >= 720;
+  const effectiveColumnMode: ColumnMode = dualEnabled ? 'dual' : 'single';
+  const pageStep = effectiveColumnMode === 'dual' ? 2 : 1;
 
   const [manifest, setManifest] = useState<ReaderManifest | null>(null);
   const [chapter, setChapter] = useState<ReaderChapter | null>(null);
@@ -206,8 +216,14 @@ const ReaderPage: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ theme, fontSize }));
-  }, [theme, fontSize]);
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ theme, fontSize, columnMode }));
+  }, [theme, fontSize, columnMode]);
+
+  useEffect(() => {
+    if (viewportWidth < 720 && columnMode === 'dual') {
+      setColumnMode('single');
+    }
+  }, [viewportWidth, columnMode]);
 
   useEffect(() => {
     if (!id || Number.isNaN(Number(id))) {
@@ -271,14 +287,15 @@ const ReaderPage: React.FC = () => {
 
   const pages = useMemo(() => {
     if (!chapter) return [];
-    return paginateContent(chapter.content, fontSize, viewportWidth);
-  }, [chapter, fontSize, viewportWidth]);
+    return paginateContent(chapter.content, fontSize, viewportWidth, effectiveColumnMode);
+  }, [chapter, fontSize, viewportWidth, effectiveColumnMode]);
 
   useEffect(() => {
     if (!chapter || !pages.length) return;
-    const nextPage = Math.min(pages.length - 1, Math.max(0, Math.round(pendingProgress * Math.max(0, pages.length - 1))));
+    let nextPage = Math.min(pages.length - 1, Math.max(0, Math.round(pendingProgress * Math.max(0, pages.length - 1))));
+    if (pageStep === 2) nextPage -= nextPage % 2;
     setPageIndex(nextPage);
-  }, [chapter, pages, pendingProgress]);
+  }, [chapter, pages, pendingProgress, pageStep]);
 
   useEffect(() => {
     if (!id || !chapter || !pages.length || !isLoggedIn) return;
@@ -335,7 +352,10 @@ const ReaderPage: React.FC = () => {
 
   const currentTheme = THEME_PRESETS[theme];
   const currentPageText = pages[pageIndex] || '';
+  const secondaryPageText = effectiveColumnMode === 'dual' ? (pages[pageIndex + 1] || '') : '';
   const currentChapterIndex = manifest?.toc.findIndex(item => item.id === chapter?.id) ?? -1;
+  const chapterDisplayTotal = Math.max(1, Math.ceil(pages.length / pageStep));
+  const chapterDisplayIndex = Math.min(chapterDisplayTotal, Math.floor(pageIndex / pageStep) + 1);
   const globalPercent = manifest?.book.readerPageCount && chapter
     ? Math.min(
         100,
@@ -356,7 +376,7 @@ const ReaderPage: React.FC = () => {
   function handlePrevPage() {
     if (!chapter || !pages.length) return;
     if (pageIndex > 0) {
-      setPageIndex(prev => prev - 1);
+      setPageIndex(prev => Math.max(0, prev - pageStep));
       return;
     }
     if (chapter.previousChapter) {
@@ -366,8 +386,8 @@ const ReaderPage: React.FC = () => {
 
   function handleNextPage() {
     if (!chapter || !pages.length) return;
-    if (pageIndex < pages.length - 1) {
-      setPageIndex(prev => prev + 1);
+    if (pageIndex + pageStep < pages.length) {
+      setPageIndex(prev => Math.min(pages.length - 1, prev + pageStep));
       return;
     }
     if (chapter.nextChapter) {
@@ -452,6 +472,16 @@ const ReaderPage: React.FC = () => {
             <Tooltip title="增大字号">
               <Button icon={<PlusOutlined />} onClick={() => setFontSize(size => clampFontSize(size + 2))} />
             </Tooltip>
+            <Tooltip title={viewportWidth < 720 ? '窄屏下仅支持单栏阅读' : (effectiveColumnMode === 'dual' ? '切换为单栏' : '切换为双栏')}>
+              <Button
+                icon={<ColumnWidthOutlined />}
+                disabled={viewportWidth < 720}
+                type={effectiveColumnMode === 'dual' ? 'primary' : 'default'}
+                onClick={() => setColumnMode(mode => (mode === 'dual' ? 'single' : 'dual'))}
+              >
+                {effectiveColumnMode === 'dual' ? '双栏' : '单栏'}
+              </Button>
+            </Tooltip>
             <Button onClick={() => setTheme('light')} type={theme === 'light' ? 'primary' : 'default'}>
               浅色
             </Button>
@@ -520,20 +550,48 @@ const ReaderPage: React.FC = () => {
                   </div>
 
                   <article style={{ minHeight: viewportWidth < 640 ? 360 : 520, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize, lineHeight: 1.95, letterSpacing: 0.2, color: currentTheme.text }}>
-                      {currentPageText}
+                    <div
+                      style={{
+                        display: effectiveColumnMode === 'dual' ? 'grid' : 'block',
+                        gridTemplateColumns: effectiveColumnMode === 'dual' ? '1fr 1fr' : undefined,
+                        gap: effectiveColumnMode === 'dual' ? 32 : 0,
+                      }}
+                    >
+                      <div style={{ whiteSpace: 'pre-wrap', fontSize, lineHeight: 1.95, letterSpacing: 0.2, color: currentTheme.text }}>
+                        {currentPageText}
+                      </div>
+                      {effectiveColumnMode === 'dual' && (
+                        <div
+                          style={{
+                            whiteSpace: 'pre-wrap',
+                            fontSize,
+                            lineHeight: 1.95,
+                            letterSpacing: 0.2,
+                            color: currentTheme.text,
+                            borderLeft: `1px solid ${currentTheme.border}`,
+                            paddingLeft: 24,
+                          }}
+                        >
+                          {secondaryPageText}
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${currentTheme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                       <div style={{ fontSize: 12, color: currentTheme.muted }}>
-                        本章第 {pageIndex + 1} / {pages.length} 页
+                        本章第 {chapterDisplayIndex} / {chapterDisplayTotal} 页
                         {manifest.book.readerPageCount ? ` · 全书约 ${chapter.pageStart + pageIndex} / ${manifest.book.readerPageCount} 页` : ''}
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <Button icon={<LeftOutlined />} onClick={handlePrevPage} disabled={pageIndex === 0 && !chapter.previousChapter}>
                           上一页
                         </Button>
-                        <Button type="primary" icon={<RightOutlined />} onClick={handleNextPage} disabled={pageIndex === pages.length - 1 && !chapter.nextChapter}>
+                        <Button
+                          type="primary"
+                          icon={<RightOutlined />}
+                          onClick={handleNextPage}
+                          disabled={pageIndex + pageStep >= pages.length && !chapter.nextChapter}
+                        >
                           下一页
                         </Button>
                       </div>
@@ -545,7 +603,7 @@ const ReaderPage: React.FC = () => {
 
             <div style={{ marginTop: 14, color: currentTheme.muted, fontSize: 12, lineHeight: 1.8 }}>
               <div>{manifest.book.readerLicenseNote || '仅展示已授权或公版书全文，请在合法范围内阅读。'}</div>
-              <div>键盘 ← → 或空格 也可翻页。</div>
+              <div>键盘 ← → 或空格 也可翻页，宽屏下支持单双栏切换。</div>
             </div>
           </section>
         </div>

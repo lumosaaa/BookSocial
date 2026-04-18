@@ -1,9 +1,3 @@
-/*
- * Layout.css
- * BookSocial 三栏布局样式
- * 所有颜色/间距均引用 tokens.css 中的 CSS 变量
- */
-
 /* ─── 整体容器 ──────────────────────────────────────────────────── */
 .bs-layout {
   display: flex;
@@ -13,7 +7,7 @@
 
 /* ─── 左侧导航栏 ─────────────────────────────────────────────────── */
 .bs-sidebar {
-  width: var(--layout-sidebar-width);
+  width: var(--layout-sidebar-current);
   flex-shrink: 0;
   position: fixed;
   top: 0;
@@ -25,6 +19,11 @@
   flex-direction: column;
   padding: var(--space-lg) var(--space-md);
   z-index: var(--z-sticky);
+  transition: width var(--transition-normal), padding var(--transition-normal);
+}
+
+.bs-sidebar--collapsed {
+  padding-inline: var(--space-sm);
 }
 
 /* Logo */
@@ -55,6 +54,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+  flex: 1;
 }
 
 .bs-nav-item {
@@ -67,7 +67,13 @@
   text-decoration: none;
   font-size: var(--font-size-h3);
   font-weight: var(--font-weight-semibold);
-  transition: background-color var(--transition-fast), color var(--transition-fast);
+  transition: background-color var(--transition-fast), color var(--transition-fast), padding var(--transition-fast);
+}
+
+.bs-sidebar--collapsed .bs-nav-item {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0;
 }
 
 .bs-nav-item:hover {
@@ -93,25 +99,50 @@
   justify-content: center;
 }
 
+.bs-sidebar__toggle {
+  height: 40px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.bs-sidebar__toggle:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary-light);
+}
+
+.bs-sidebar--collapsed .bs-sidebar__toggle {
+  padding-inline: 0;
+}
+
 /* ─── 中央内容区 ─────────────────────────────────────────────────── */
 .bs-main {
   flex: 1;
-  margin-left: var(--layout-sidebar-width);
-  margin-right: var(--layout-panel-width);
+  margin-left: var(--layout-sidebar-current);
+  margin-right: var(--layout-panel-current);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  transition: margin var(--transition-normal);
 }
 
-/* 顶部搜索栏（移动端/平板才显示） */
+/* 顶部搜索栏 */
 .bs-topbar {
-  display: none;
+  display: flex;
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-  background-color: var(--color-surface-card);
+  min-height: var(--layout-header-height);
+  background-color: color-mix(in srgb, var(--color-surface-card) 92%, transparent);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-border);
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-sm) clamp(16px, 3vw, 32px);
   gap: var(--space-sm);
   align-items: center;
 }
@@ -141,15 +172,14 @@
 /* 内容包裹 */
 .bs-content {
   flex: 1;
-  max-width: var(--layout-content-max);
-  width: 100%;
+  width: min(100%, var(--layout-content-max));
   margin: 0 auto;
-  padding: var(--space-lg) var(--space-md);
+  padding: var(--space-lg) clamp(16px, 3vw, 32px);
 }
 
 /* ─── 右侧面板 ──────────────────────────────────────────────────── */
 .bs-panel {
-  width: var(--layout-panel-width);
+  width: var(--layout-panel-current);
   flex-shrink: 0;
   position: fixed;
   top: 0;
@@ -159,6 +189,36 @@
   border-left: 1px solid var(--color-border);
   background-color: var(--color-surface);
   padding: var(--space-lg) var(--space-md);
+  transition: width var(--transition-normal), padding var(--transition-normal);
+}
+
+.bs-panel--collapsible {
+  padding-top: 72px;
+}
+
+.bs-panel--collapsed {
+  padding-inline: var(--space-xs);
+}
+
+.bs-panel__toggle {
+  position: absolute;
+  top: 18px;
+  left: 12px;
+  right: 12px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-card);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.bs-panel__inner--hidden {
+  display: none;
 }
 
 /* ─── 底部 TabBar（仅移动端可见） ──────────────────────────────── */
@@ -205,7 +265,6 @@
 
 /* ─── 响应式断点 ─────────────────────────────────────────────────── */
 
-/* 平板（768px - 1279px）：隐藏右侧面板，中央内容扩展 */
 @media (max-width: 1279px) {
   .bs-panel {
     display: none;
@@ -214,13 +273,8 @@
   .bs-main {
     margin-right: 0;
   }
-
-  .bs-topbar {
-    display: flex;
-  }
 }
 
-/* 移动端（< 768px）：隐藏左侧导航，显示底部TabBar */
 @media (max-width: 767px) {
   .bs-sidebar {
     display: none;
@@ -228,11 +282,15 @@
 
   .bs-main {
     margin-left: 0;
-    padding-bottom: 60px; /* 为底部TabBar留出空间 */
+    padding-bottom: 60px;
   }
 
   .bs-tabbar {
     display: flex;
+  }
+
+  .bs-topbar {
+    padding-inline: var(--space-sm);
   }
 
   .bs-content {
