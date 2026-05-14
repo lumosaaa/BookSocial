@@ -131,6 +131,10 @@ const router = createBrowserRouter([
         path: '/discover',
         element: lazyPage(() => import('./pages/discover/DiscoverPage')),
       },
+      {
+        path: '/admin',
+        element: lazyPage(() => import('./pages/admin/AdminDashboardPage')),
+      },
 
       // ── 动态详情（模块3）────────────────────────────────────
       //  包含完整帖子内容 + 嵌套评论区 + 转发弹窗

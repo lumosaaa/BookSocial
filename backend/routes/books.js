@@ -15,6 +15,7 @@ const express = require('express');
 const router = express.Router();
 const { authMiddleware, optionalAuth } = require('../common/authMiddleware');
 const bookService = require('../services/bookService');
+const noteService = require('../services/noteService');
 
 // ── 书籍浏览（首页） ─────────────────────────────────────────────────────────
 // GET /api/v1/books?page=1&category=
@@ -174,6 +175,25 @@ router.get('/:id', optionalAuth, async (req, res) => {
   } catch (err) {
     console.error('[books/:id]', err);
     res.fail('获取书籍失败', 500);
+  }
+});
+
+// ── 某书的公开笔记 ───────────────────────────────────────────────────────────
+// GET /api/v1/books/:id/notes?page=&pageSize=&sort=hot|new
+router.get('/:id/notes', optionalAuth, async (req, res) => {
+  try {
+    const bookId = Number(req.params.id);
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(50, Math.max(1, Number(req.query.pageSize) || 20));
+    const sort = req.query.sort === 'new' ? 'new' : 'hot';
+
+    if (isNaN(bookId)) return res.fail('书籍ID格式错误', 400);
+
+    const result = await noteService.getBookNotes(bookId, req.user?.id || null, page, pageSize, sort);
+    res.ok(result);
+  } catch (err) {
+    console.error('[books/:id/notes]', err);
+    res.fail('获取书籍笔记失败', err.statusCode || 500);
   }
 });
 

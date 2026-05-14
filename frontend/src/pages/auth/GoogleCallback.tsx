@@ -5,6 +5,13 @@ import { Spin, Result, Button } from 'antd';
 import { useAuthStore } from '../../store/authStore';
 import { userApi } from '../../api/authApi';
 
+const GOOGLE_ERROR_TEXT: Record<string, string> = {
+  google_failed: 'Google 授权未完成或被取消，请重新尝试。',
+  google_token_exchange_failed: 'Google 授权成功后换取登录令牌失败，请检查后端回调地址与 Google OAuth 配置。',
+  google_config_error: '服务器未正确配置 Google 登录参数，请检查 GOOGLE_CLIENT_ID、GOOGLE_CLIENT_SECRET 与回调地址。',
+  fetch_failed: '已获取登录令牌，但拉取当前用户信息失败，请稍后重试。',
+};
+
 /**
  * Google OAuth 回调页
  *
@@ -61,6 +68,7 @@ export default function GoogleCallback() {
   }, []);
 
   const error = params.get('error');
+  const errorText = error ? (GOOGLE_ERROR_TEXT[error] || 'Google 登录失败，请稍后重试。') : '';
 
   if (error) {
     return (
@@ -76,7 +84,7 @@ export default function GoogleCallback() {
         <Result
           status="error"
           title="Google 登录失败"
-          subTitle="授权被拒绝或发生错误，正在返回登录页..."
+          subTitle={errorText}
           extra={
             <Button type="primary" onClick={() => navigate('/login')}
               style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}>

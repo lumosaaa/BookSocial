@@ -11,15 +11,14 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../store/authStore';
 import { authApi, userApi } from '../../api/authApi';
-import apiClient from '../../api/apiClient';
+import { getCategories } from '../../api/bookApi';
 
 const { Text } = Typography;
 
 interface TagItem {
   id: number;
   name: string;
-  category: number;
-  isOfficial: number;
+  icon?: string;
 }
 
 const STEP_LABELS = ['创建账号', '阅读偏好'];
@@ -78,13 +77,16 @@ export default function RegisterPage() {
       const { user, accessToken, refreshToken } = data.data;
       setUser(user, accessToken, refreshToken);
 
-      // 加载官方标签
+      // 加载阅读偏好分类
       setTagsLoading(true);
       try {
-        const tagRes = await apiClient.get('/tags', { params: { isOfficial: 1 } });
-        setTags(tagRes.data.data || []);
+        const res = await getCategories();
+        setTags((res.data.data || []).map((item: { id: number; name: string; icon?: string }) => ({
+          id: item.id,
+          name: item.name,
+          icon: item.icon,
+        })));
       } catch {
-        // 接口不存在时回退到空数组，步骤继续
         setTags([]);
       } finally {
         setTagsLoading(false);
@@ -346,7 +348,7 @@ export default function RegisterPage() {
                       }}
                       icon={selected ? <CheckCircleFilled /> : undefined}
                     >
-                      {tag.name}
+                      {tag.icon ? `${tag.icon} ` : ''}{tag.name}
                     </Tag>
                   );
                 })}

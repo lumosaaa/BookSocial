@@ -30,7 +30,7 @@ router.post('/', authMiddleware, async (req, res) => {
     if (existing) return res.fail('您已举报过该内容，请等待处理', 409);
 
     await db.query(
-      `INSERT INTO reports (reporter_id, target_id, target_type, reason, detail)
+      `INSERT INTO reports (reporter_id, target_id, target_type, reason_type, description)
        VALUES (?,?,?,?,?)`,
       [userId, targetId, targetType, reason, detail.slice(0, 500)]
     );

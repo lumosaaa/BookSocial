@@ -20,6 +20,8 @@ export interface PostImage {
 export interface Post {
   data: any;
   id: number;
+  bookmarkId?: number;
+  bookmarkedAt?: string;
   userId: number;
   username: string;
   avatarUrl?: string;

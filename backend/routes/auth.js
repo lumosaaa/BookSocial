@@ -14,6 +14,22 @@ const {
   refreshAccessToken,
 } = require('../services/authService');
 
+function getFrontendUrl(req) {
+  return (process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+}
+
+function getGoogleCallbackUrl(req) {
+  if (process.env.GOOGLE_CALLBACK_URL) {
+    return process.env.GOOGLE_CALLBACK_URL;
+  }
+  return `${req.protocol}://${req.get('host')}/auth/google/callback`;
+}
+
+function redirectGoogleError(req, res, errorCode) {
+  const frontendUrl = getFrontendUrl(req);
+  res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(errorCode)}`);
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Passport Google Strategy 初始化
 //  （app.js 中需 app.use(passport.initialize())）
@@ -24,9 +40,8 @@ passport.use(
     {
       clientID:     process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL:
-        process.env.GOOGLE_CALLBACK_URL ||
-        'http://localhost:3001/auth/google/callback',
+      callbackURL:  process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/auth/google/callback',
+      proxy:        true,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -142,27 +157,47 @@ router.post('/login', async (req, res) => {
 
 router.get(
   '/google',
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    session: false,
-  })
+  (req, res, next) => {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      return redirectGoogleError(req, res, 'google_config_error');
+    }
+
+    passport.authenticate('google', {
+      scope: ['profile', 'email'],
+      session: false,
+      callbackURL: getGoogleCallbackUrl(req),
+    })(req, res, next);
+  }
 );
 
 router.get(
   '/google/callback',
-  passport.authenticate('google', {
-    session: false,
-    failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=google_failed`,
-  }),
-  (req, res) => {
-    const { accessToken, refreshToken, isNewUser } = req.user;
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const params = new URLSearchParams({
-      accessToken,
-      refreshToken,
-      isNewUser: String(isNewUser),
-    });
-    res.redirect(`${frontendUrl}/auth/callback?${params.toString()}`);
+  (req, res, next) => {
+    passport.authenticate(
+      'google',
+      {
+        session: false,
+        callbackURL: getGoogleCallbackUrl(req),
+      },
+      (err, user) => {
+        if (err) {
+          console.error('[auth/google/callback]', err);
+          return redirectGoogleError(req, res, 'google_token_exchange_failed');
+        }
+        if (!user) {
+          return redirectGoogleError(req, res, 'google_failed');
+        }
+
+        const { accessToken, refreshToken, isNewUser } = user;
+        const frontendUrl = getFrontendUrl(req);
+        const params = new URLSearchParams({
+          accessToken,
+          refreshToken,
+          isNewUser: String(isNewUser),
+        });
+        res.redirect(`${frontendUrl}/auth/callback?${params.toString()}`);
+      }
+    )(req, res, next);
   }
 );
 

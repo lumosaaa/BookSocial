@@ -30,6 +30,8 @@ const { responseHelper, notFoundHandler, errorHandler } = require('./common/resp
 const app    = express();
 const server = createServer(app);
 
+app.set('trust proxy', 1);
+
 // ════════════════════════════════════════════════════════════════════════════
 //  1. 安全中间件
 // ════════════════════════════════════════════════════════════════════════════
@@ -157,9 +159,10 @@ app.use('/internal',             notifyInternalRouter);   // POST /internal/noti
 const groupRoutes = require('./routes/groups');
 const groupChatRoutes = require('./routes/groupChat');
 const { bookDiscRouter, discRouter } = require('./routes/discussions');
+const adminRoutes = require('./routes/admin');
 app.use('/api/v1/groups',       groupRoutes);
 app.use('/api/v1/groups',       groupChatRoutes);
-app.use('/api/v1/books',        bookDiscRouter);   // /:bookId/discussions
+app.use('/api/v1/books/:bookId/discussions', bookDiscRouter);
 app.use('/api/v1/discussions',   discRouter);       // /:id, /:id/comments, /:id/likes
 
 // ── M6 · 推荐系统 & 运营 ────────────────────────────────────────────────────
@@ -169,6 +172,7 @@ const interestProfileRoutes = require('./routes/interestProfile');
 app.use('/api/v1/recommendations', recRoutes);
 app.use('/internal',               internalAuditRouter);    // POST /internal/audit/text
 app.use('/api/v1/reports',         auditReportsRouter);     // M6 举报管理（GET/PUT，与 M3 POST 共存）
+app.use('/api/v1/admin',           adminRoutes);
 app.use('/api/v1/admin/keywords',  keywordsRouter);
 app.use('/api/v1/users',          interestProfileRoutes);   // /:id/interest-profile
 

@@ -12,7 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Spin, Button, Rate, Tag, Tabs, Modal, InputNumber,
-  Input, message, Tooltip, Divider, Progress, Empty,
+  Input, message, Tooltip, Divider, Progress, Empty, Select,
 } from 'antd';
 import {
   BookOutlined, HeartOutlined, ReadOutlined, CheckOutlined,
@@ -23,8 +23,15 @@ import {
   STATUS_LABELS, STATUS_COLORS,
   type Book,
 } from '../../api/bookApi';
-import { getBookNotes } from '../../api/postApi';
-import { listDiscussions } from '../../api/groupApi';
+import { createNote, getBookNotes } from '../../api/postApi';
+import {
+  createDiscussion,
+  createDiscussionComment,
+  getDiscussion,
+  listDiscussionComments,
+  listDiscussions,
+  toggleDiscussionLike,
+} from '../../api/groupApi';
 import NoteCard from '../../components/NoteCard';
 import { useAuthStore } from '../../store/authStore';
 
@@ -51,6 +58,55 @@ const BookDetailPage: React.FC = () => {
   const [bookNotes, setBookNotes]     = useState<any[]>([]);
   const [discussions, setDiscussions] = useState<any[]>([]);
   const [tabLoading, setTabLoading]   = useState(false);
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [noteForm, setNoteForm] = useState({
+    title: '',
+    content: '',
+    quote: '',
+    pageNumber: undefined as number | undefined,
+    chapter: '',
+  });
+  const [discussionModalOpen, setDiscussionModalOpen] = useState(false);
+  const [discussionSubmitting, setDiscussionSubmitting] = useState(false);
+  const [discussionForm, setDiscussionForm] = useState({
+    title: '',
+    content: '',
+    category: 0,
+    hasSpoiler: false,
+  });
+  const [discussionDetailOpen, setDiscussionDetailOpen] = useState(false);
+  const [discussionDetailLoading, setDiscussionDetailLoading] = useState(false);
+  const [activeDiscussion, setActiveDiscussion] = useState<any | null>(null);
+  const [discussionComments, setDiscussionComments] = useState<any[]>([]);
+  const [discussionCommentInput, setDiscussionCommentInput] = useState('');
+  const [discussionCommentSubmitting, setDiscussionCommentSubmitting] = useState(false);
+
+  const loadNotes = async () => {
+    if (!book) return;
+    setTabLoading(true);
+    try {
+      const data = await getBookNotes(book.id, 1, 10, 'hot');
+      setBookNotes(data.list);
+    } catch {
+      message.error('加载笔记失败');
+    } finally {
+      setTabLoading(false);
+    }
+  };
+
+  const loadDiscussions = async () => {
+    if (!book) return;
+    setTabLoading(true);
+    try {
+      const data = await listDiscussions(book.id, { page: 1, sort: 'hot' });
+      setDiscussions(data.list);
+    } catch {
+      message.error('加载讨论失败');
+    } finally {
+      setTabLoading(false);
+    }
+  };
 
   // ── 加载书籍详情 ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -65,18 +121,10 @@ const BookDetailPage: React.FC = () => {
   useEffect(() => {
     if (!book) return;
     if (activeTab === 'notes') {
-      setTabLoading(true);
-      getBookNotes(book.id, 1, 10, 'hot')
-        .then(data => setBookNotes(data.list))
-        .catch(() => message.error('加载笔记失败'))
-        .finally(() => setTabLoading(false));
+      loadNotes();
     }
     if (activeTab === 'discuss') {
-      setTabLoading(true);
-      listDiscussions(book.id, { page: 1, sort: 'hot' })
-        .then(data => setDiscussions(data.list))
-        .catch(() => message.error('加载讨论失败'))
-        .finally(() => setTabLoading(false));
+      loadDiscussions();
     }
   }, [activeTab, book]);
 
@@ -149,6 +197,110 @@ const BookDetailPage: React.FC = () => {
       message.error('添加标签失败');
     } finally {
       setTagAdding(false);
+    }
+  };
+
+  const handleCreateNote = async () => {
+    if (!isLoggedIn) { navigate('/login'); return; }
+    if (!book || !noteForm.content.trim()) {
+      message.warning('请填写笔记内容');
+      return;
+    }
+    setNoteSubmitting(true);
+    try {
+      await createNote({
+        bookId: book.id,
+        title: noteForm.title.trim() || undefined,
+        content: noteForm.content.trim(),
+        quote: noteForm.quote.trim() || undefined,
+        pageNumber: noteForm.pageNumber,
+        chapter: noteForm.chapter.trim() || undefined,
+        isPublic: true,
+      });
+      message.success('笔记已发布');
+      setNoteModalOpen(false);
+      setNoteForm({ title: '', content: '', quote: '', pageNumber: undefined, chapter: '' });
+      setActiveTab('notes');
+      await loadNotes();
+    } catch {
+      message.error('发布笔记失败');
+    } finally {
+      setNoteSubmitting(false);
+    }
+  };
+
+  const handleCreateDiscussion = async () => {
+    if (!isLoggedIn) { navigate('/login'); return; }
+    if (!book || !discussionForm.title.trim() || !discussionForm.content.trim()) {
+      message.warning('请填写讨论标题和内容');
+      return;
+    }
+    setDiscussionSubmitting(true);
+    try {
+      const created = await createDiscussion(book.id, {
+        title: discussionForm.title.trim(),
+        content: discussionForm.content.trim(),
+        category: discussionForm.category,
+        hasSpoiler: discussionForm.hasSpoiler,
+      });
+      message.success('讨论已发布');
+      setDiscussionModalOpen(false);
+      setDiscussionForm({ title: '', content: '', category: 0, hasSpoiler: false });
+      setActiveTab('discuss');
+      setDiscussions(prev => [created, ...prev]);
+    } catch {
+      message.error('发布讨论失败');
+    } finally {
+      setDiscussionSubmitting(false);
+    }
+  };
+
+  const openDiscussionDetail = async (discId: number) => {
+    setDiscussionDetailOpen(true);
+    setDiscussionDetailLoading(true);
+    try {
+      const [disc, comments] = await Promise.all([
+        getDiscussion(discId),
+        listDiscussionComments(discId, 1),
+      ]);
+      setActiveDiscussion(disc);
+      setDiscussionComments(comments.list);
+    } catch {
+      message.error('加载讨论详情失败');
+      setDiscussionDetailOpen(false);
+    } finally {
+      setDiscussionDetailLoading(false);
+    }
+  };
+
+  const handleDiscussionLike = async () => {
+    if (!isLoggedIn) { navigate('/login'); return; }
+    if (!activeDiscussion) return;
+    try {
+      const res = await toggleDiscussionLike(activeDiscussion.id);
+      setActiveDiscussion((prev: any) => prev ? { ...prev, isLiked: res.liked, likeCount: res.likeCount } : prev);
+      setDiscussions(prev => prev.map((item: any) => item.id === activeDiscussion.id ? { ...item, isLiked: res.liked, likeCount: res.likeCount } : item));
+    } catch {
+      message.error('操作失败');
+    }
+  };
+
+  const handleCreateDiscussionComment = async () => {
+    if (!isLoggedIn) { navigate('/login'); return; }
+    if (!activeDiscussion || !discussionCommentInput.trim()) return;
+    setDiscussionCommentSubmitting(true);
+    try {
+      const comment = await createDiscussionComment(activeDiscussion.id, {
+        content: discussionCommentInput.trim(),
+      });
+      setDiscussionComments(prev => [...prev, comment]);
+      setDiscussionCommentInput('');
+      setActiveDiscussion((prev: any) => prev ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : prev);
+      setDiscussions(prev => prev.map((item: any) => item.id === activeDiscussion.id ? { ...item, commentCount: (item.commentCount || 0) + 1 } : item));
+    } catch {
+      message.error('发表评论失败');
+    } finally {
+      setDiscussionCommentSubmitting(false);
     }
   };
 
@@ -441,26 +593,54 @@ const BookDetailPage: React.FC = () => {
           },
           {
             key: 'notes',
-            label: '笔记',
+            label: `笔记 ${bookNotes.length > 0 ? bookNotes.length : ''}`,
             children: tabLoading ? (
               <div style={{ padding: 24, textAlign: 'center' }}><Spin /></div>
             ) : bookNotes.length === 0 ? (
-              <Empty description="暂无公开笔记" style={{ padding: 24 }} />
+              <div style={{ padding: 24 }}>
+                <Empty description="暂无公开笔记" />
+                {isLoggedIn && (
+                  <div style={{ textAlign: 'center', marginTop: 16 }}>
+                    <Button type="primary" onClick={() => setNoteModalOpen(true)}>
+                      写第一篇笔记
+                    </Button>
+                  </div>
+                )}
+              </div>
             ) : (
               <div style={{ padding: '12px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                  <Button onClick={() => setNoteModalOpen(true)} type="primary">
+                    写笔记
+                  </Button>
+                </div>
                 {bookNotes.map(n => <NoteCard key={n.id} note={n} />)}
               </div>
             ),
           },
           {
             key: 'discuss',
-            label: '讨论',
+            label: `讨论 ${discussions.length > 0 ? discussions.length : ''}`,
             children: tabLoading ? (
               <div style={{ padding: 24, textAlign: 'center' }}><Spin /></div>
             ) : discussions.length === 0 ? (
-              <Empty description="还没有讨论，第一个发起话题吧" style={{ padding: 24 }} />
+              <div style={{ padding: 24 }}>
+                <Empty description="还没有讨论，第一个发起话题吧" />
+                {isLoggedIn && (
+                  <div style={{ textAlign: 'center', marginTop: 16 }}>
+                    <Button type="primary" onClick={() => setDiscussionModalOpen(true)}>
+                      发起讨论
+                    </Button>
+                  </div>
+                )}
+              </div>
             ) : (
               <div style={{ padding: '12px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
+                  <Button onClick={() => setDiscussionModalOpen(true)} type="primary">
+                    发起讨论
+                  </Button>
+                </div>
                 {discussions.map(d => (
                   <div
                     key={d.id}
@@ -471,7 +651,7 @@ const BookDetailPage: React.FC = () => {
                       border: '1px solid #f0f0f0',
                       cursor: 'pointer',
                     }}
-                    onClick={() => navigate(`/groups`)}
+                    onClick={() => openDiscussionDetail(d.id)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <strong style={{ fontSize: 14 }}>{d.title}</strong>
@@ -521,6 +701,170 @@ const BookDetailPage: React.FC = () => {
             </span>
           )}
         </div>
+      </Modal>
+
+      <Modal
+        title="写阅读笔记"
+        open={noteModalOpen}
+        onCancel={() => setNoteModalOpen(false)}
+        onOk={handleCreateNote}
+        okText="发布笔记"
+        confirmLoading={noteSubmitting}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Input
+            placeholder="笔记标题（可选）"
+            value={noteForm.title}
+            onChange={e => setNoteForm(prev => ({ ...prev, title: e.target.value }))}
+            maxLength={120}
+          />
+          <Input.TextArea
+            placeholder="写下你的阅读感受..."
+            rows={6}
+            value={noteForm.content}
+            onChange={e => setNoteForm(prev => ({ ...prev, content: e.target.value }))}
+            maxLength={50000}
+            showCount
+          />
+          <Input
+            placeholder="摘录（可选）"
+            value={noteForm.quote}
+            onChange={e => setNoteForm(prev => ({ ...prev, quote: e.target.value }))}
+            maxLength={500}
+          />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <InputNumber
+              min={1}
+              max={book.pages || 9999}
+              placeholder="页码"
+              value={noteForm.pageNumber}
+              onChange={val => setNoteForm(prev => ({ ...prev, pageNumber: val || undefined }))}
+              style={{ width: 120 }}
+            />
+            <Input
+              placeholder="章节（可选）"
+              value={noteForm.chapter}
+              onChange={e => setNoteForm(prev => ({ ...prev, chapter: e.target.value }))}
+              maxLength={120}
+            />
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        title="发起书籍讨论"
+        open={discussionModalOpen}
+        onCancel={() => setDiscussionModalOpen(false)}
+        onOk={handleCreateDiscussion}
+        okText="发布讨论"
+        confirmLoading={discussionSubmitting}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Input
+            placeholder="讨论标题"
+            value={discussionForm.title}
+            onChange={e => setDiscussionForm(prev => ({ ...prev, title: e.target.value }))}
+            maxLength={200}
+          />
+          <Select
+            value={discussionForm.category}
+            onChange={(value: number) => setDiscussionForm(prev => ({ ...prev, category: value }))}
+            options={[
+              { value: 0, label: '综合' },
+              { value: 1, label: '书评' },
+              { value: 2, label: '剧情' },
+              { value: 3, label: '推荐' },
+              { value: 4, label: '求助' },
+            ]}
+          />
+          <Input.TextArea
+            placeholder="写下你的观点、问题或分享..."
+            rows={6}
+            value={discussionForm.content}
+            onChange={e => setDiscussionForm(prev => ({ ...prev, content: e.target.value }))}
+            maxLength={5000}
+            showCount
+          />
+          <Button
+            onClick={() => setDiscussionForm(prev => ({ ...prev, hasSpoiler: !prev.hasSpoiler }))}
+            type={discussionForm.hasSpoiler ? 'primary' : 'default'}
+          >
+            {discussionForm.hasSpoiler ? '含剧透' : '不含剧透'}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        title="讨论详情"
+        open={discussionDetailOpen}
+        onCancel={() => {
+          setDiscussionDetailOpen(false);
+          setActiveDiscussion(null);
+          setDiscussionComments([]);
+          setDiscussionCommentInput('');
+        }}
+        footer={null}
+        width={760}
+      >
+        {discussionDetailLoading || !activeDiscussion ? (
+          <div style={{ textAlign: 'center', padding: 48 }}><Spin /></div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                <Tag color="green">{activeDiscussion.categoryName}</Tag>
+                {activeDiscussion.hasSpoiler && <Tag color="red">剧透</Tag>}
+                <span style={{ color: '#999', fontSize: 12 }}>@{activeDiscussion.username}</span>
+              </div>
+              <h3 style={{ margin: '0 0 8px', fontSize: 18 }}>{activeDiscussion.title}</h3>
+              <div style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text-primary)', lineHeight: 1.8 }}>
+                {activeDiscussion.content}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+                <Button onClick={handleDiscussionLike} type={activeDiscussion.isLiked ? 'primary' : 'default'}>
+                  {activeDiscussion.isLiked ? '已点赞' : '点赞'} {activeDiscussion.likeCount || 0}
+                </Button>
+                <span style={{ color: '#999', fontSize: 12 }}>{activeDiscussion.commentCount || 0} 条评论</span>
+              </div>
+            </div>
+
+            <Divider style={{ margin: 0 }} />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {discussionComments.length === 0 ? (
+                <Empty description="还没有评论" />
+              ) : (
+                discussionComments.map(comment => (
+                  <div key={comment.id} style={{ background: '#fafafa', borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{comment.username}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{comment.content}</div>
+                    <div style={{ marginTop: 6, color: '#999', fontSize: 12 }}>
+                      {new Date(comment.createdAt).toLocaleString('zh-CN')}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Input.TextArea
+                rows={3}
+                value={discussionCommentInput}
+                onChange={e => setDiscussionCommentInput(e.target.value)}
+                placeholder="写下你的评论..."
+                maxLength={1000}
+              />
+              <Button
+                type="primary"
+                onClick={handleCreateDiscussionComment}
+                loading={discussionCommentSubmitting}
+                disabled={!discussionCommentInput.trim()}
+              >
+                发表评论
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

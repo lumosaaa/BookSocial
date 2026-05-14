@@ -22,11 +22,13 @@ import {
   MenuUnfoldOutlined,
   RightOutlined,
   LeftOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { Badge, Input } from 'antd';
 import './Layout.css';
 import { useAuthStore }   from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
+import { getRoleFromToken } from '../utils/auth';
 import {
   getMessageUnreadCount,
   getNotificationUnreadCount,
@@ -73,6 +75,7 @@ export default function Layout({
   // 鉴权 + socket 接线
   const isLoggedIn          = useAuthStore(s => s.isLoggedIn);
   const accessToken         = useAuthStore(s => s.accessToken);
+  const currentUser         = useAuthStore(s => s.user);
   const connectSocket       = useSocketStore(s => s.connect);
   const disconnectSocket    = useSocketStore(s => s.disconnect);
   const setMessageUnread    = useSocketStore(s => s.setMessageUnread);
@@ -80,6 +83,7 @@ export default function Layout({
 
   const messageUnread      = useSocketStore(s => s.messageUnread);
   const notificationUnread = useSocketStore(s => s.notificationUnread);
+  const resolvedRole       = currentUser?.role || getRoleFromToken(accessToken);
 
   // 登录态变化时连接 / 断开 socket，并拉取未读数
   useEffect(() => {
@@ -128,6 +132,12 @@ export default function Layout({
       : '0px',
   }) as React.CSSProperties, [sidebarCollapsed, rightPanel, rightPanelCollapsible, panelCollapsed]);
 
+  const navItems = useMemo(() => (
+    resolvedRole === 'admin'
+      ? [...NAV_ITEMS, { to: '/admin', icon: <SafetyCertificateOutlined />, label: '管理' }]
+      : NAV_ITEMS
+  ), [resolvedRole]);
+
   return (
     <div
       className={`bs-layout${sidebarCollapsed ? ' bs-layout--sidebar-collapsed' : ''}${rightPanel ? ' bs-layout--has-panel' : ''}${rightPanelCollapsible && panelCollapsed ? ' bs-layout--panel-collapsed' : ''}`}
@@ -144,7 +154,7 @@ export default function Layout({
 
         {/* 导航菜单 */}
         <nav className="bs-sidebar__nav">
-          {NAV_ITEMS.map(({ to, icon, label }) => (
+          {navItems.map(({ to, icon, label }) => (
             <NavLink
               key={to}
               to={to}
@@ -237,7 +247,7 @@ export default function Layout({
 
       {/* ── 底部 TabBar（移动端） ────────────────────────────────── */}
       <nav className="bs-tabbar">
-        {NAV_ITEMS.map(({ to, icon, label }) => (
+        {navItems.map(({ to, icon, label }) => (
           <NavLink
             key={to}
             to={to}

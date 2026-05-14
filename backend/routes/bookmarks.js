@@ -4,6 +4,7 @@ const express = require('express');
 const router  = express.Router();
 const { authMiddleware } = require('../common/authMiddleware');
 const db = require('../common/db');
+const postService = require('../services/postService');
 
 // ── 收藏 ──────────────────────────────────────────────────────
 // POST /api/v1/bookmarks   body: { targetId, targetType }
@@ -74,30 +75,48 @@ router.get('/me', authMiddleware, async (req, res) => {
   try {
     const { page = 1, pageSize = 20 } = req.query;
     const userId = req.user.id;
-    const offset = (page - 1) * pageSize;
+    const normalizedPage = Math.max(1, Number(page) || 1);
+    const normalizedPageSize = Math.min(50, Math.max(1, Number(pageSize) || 20));
+    const offset = (normalizedPage - 1) * normalizedPageSize;
 
     const [rows] = await db.query(
-      `SELECT bm.id AS bookmarkId, bm.target_id, bm.target_type, bm.created_at AS bookmarkedAt,
-              p.content, p.post_type AS postType, p.like_count AS likeCount,
-              u.id AS userId, u.username, u.avatar_url AS avatarUrl
+      `SELECT bm.id AS bookmarkId, bm.target_id, bm.created_at AS bookmarkedAt
        FROM bookmarks bm
-       JOIN posts p ON p.id = bm.target_id AND bm.target_type=1
-       JOIN users u ON u.id = p.user_id
-       WHERE bm.user_id=? AND bm.target_type=1 AND p.is_deleted=0
+       JOIN posts p ON p.id = bm.target_id AND bm.target_type = 1
+       WHERE bm.user_id = ? AND bm.target_type = 1 AND p.is_deleted = 0
        ORDER BY bm.created_at DESC
        LIMIT ? OFFSET ?`,
-      [userId, +pageSize, offset]
+      [userId, normalizedPageSize, offset]
     );
 
     const [[{ total }]] = await db.query(
-      'SELECT COUNT(*) AS total FROM bookmarks WHERE user_id=? AND target_type=1',
+      `SELECT COUNT(*) AS total
+       FROM bookmarks bm
+       JOIN posts p ON p.id = bm.target_id AND bm.target_type = 1
+       WHERE bm.user_id = ? AND bm.target_type = 1 AND p.is_deleted = 0`,
       [userId]
     );
 
+    const list = [];
+    for (const row of rows) {
+      const post = await postService.getPostById(row.target_id, userId);
+      if (post) {
+        list.push({
+          ...post,
+          bookmarkId: row.bookmarkId,
+          bookmarkedAt: row.bookmarkedAt,
+          isBookmarked: true,
+        });
+      }
+    }
+
     res.ok({
-      list: rows, total, page: +page, pageSize: +pageSize,
-      totalPages: Math.ceil(total / pageSize),
-      hasMore:    page * pageSize < total,
+      list,
+      total,
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      totalPages: Math.ceil(total / normalizedPageSize),
+      hasMore: normalizedPage * normalizedPageSize < total,
     });
   } catch (err) {
     res.fail(err.message, err.statusCode || 500);

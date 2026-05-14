@@ -1,6 +1,6 @@
 // src/pages/auth/LoginPage.tsx
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   Form, Input, Button, Tabs, Divider, message, Typography,
 } from 'antd';
@@ -10,16 +10,30 @@ import { authApi, userApi } from '../../api/authApi';
 
 const { Text } = Typography;
 const GOOGLE_AUTH_URL = `${new URL(import.meta.env.VITE_API_URL || 'http://localhost:3001').origin}/auth/google`;
+const LOGIN_ERROR_TEXT: Record<string, string> = {
+  google_failed: 'Google 授权未完成或已取消。',
+  google_token_exchange_failed: 'Google 已返回授权码，但后端换取 access token 失败。请检查 Google 控制台中的回调地址是否与当前后端地址完全一致。',
+  google_config_error: '后端 Google 登录配置缺失，请检查环境变量。',
+  fetch_failed: 'Google 登录后拉取用户信息失败，请稍后重试。',
+};
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const setUser  = useAuthStore((s) => s.setUser);
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading]         = useState(false);
   const [codeSending, setCodeSending] = useState(false);
   const [countdown, setCountdown]     = useState(0);
   const [activeTab, setActiveTab]     = useState<'password' | 'code'>('password');
   const [form] = Form.useForm();
+
+  useEffect(() => {
+    const error = searchParams.get('error');
+    if (error && LOGIN_ERROR_TEXT[error]) {
+      message.error(LOGIN_ERROR_TEXT[error]);
+    }
+  }, [searchParams]);
 
   /* ── 验证码倒计时 ── */
   const startCountdown = () => {

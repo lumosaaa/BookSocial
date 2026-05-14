@@ -2,16 +2,18 @@
 import { useState, useEffect } from 'react';
 import {
   Avatar, Button, Tabs, Skeleton, message,
-  Row, Col, Statistic,
+  Row, Col, Statistic, Spin, Popconfirm,
 } from 'antd';
 import {
   EditOutlined, SettingOutlined, UserOutlined,
-  BookOutlined, LogoutOutlined,
+  BookOutlined, LogoutOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { userApi } from '../../api/authApi';
 import { useAuthStore } from '../../store/authStore';
 import UserPostsPage from '../social/UserPostsPage';
+import PostCard from '../../components/PostCard';
+import { getMyBookmarks, unbookmark, type Post } from '../../api/postApi';
 
 interface Profile {
   id: number;
@@ -28,6 +30,89 @@ interface Profile {
   postCount: number;
   readingGoal: number;
   createdAt: string;
+}
+
+function BookmarkCenter() {
+  const [items, setItems] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+
+  const load = async (targetPage = 1, append = false) => {
+    setLoading(true);
+    try {
+      const data = await getMyBookmarks(targetPage, 10);
+      setItems(prev => append ? [...prev, ...data.list] : data.list);
+      setPage(targetPage);
+      setHasMore(data.hasMore);
+    } catch {
+      message.error('加载收藏失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load(1, false);
+  }, []);
+
+  const handleRemove = async (bookmarkId?: number) => {
+    if (!bookmarkId) return;
+    try {
+      await unbookmark(bookmarkId);
+      setItems(prev => prev.filter(item => item.bookmarkId !== bookmarkId));
+      message.success('已取消收藏');
+    } catch {
+      message.error('取消收藏失败');
+    }
+  };
+
+  if (loading && items.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '32px 0' }}>
+        <Spin />
+      </div>
+    );
+  }
+
+  if (!loading && items.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
+        <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.3 }}>🔖</div>
+        <div>还没有收藏内容</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ paddingTop: 12 }}>
+      {items.map(item => (
+        <div key={item.bookmarkId || item.id}>
+          <PostCard post={item} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -2, marginBottom: 12 }}>
+            <Popconfirm
+              title="确认取消收藏？"
+              onConfirm={() => handleRemove(item.bookmarkId)}
+              okText="取消收藏"
+              cancelText="保留"
+            >
+              <Button size="small" danger icon={<DeleteOutlined />} style={{ borderRadius: 14 }}>
+                取消收藏
+              </Button>
+            </Popconfirm>
+          </div>
+        </div>
+      ))}
+
+      {hasMore && (
+        <div style={{ textAlign: 'center', paddingTop: 8 }}>
+          <Button onClick={() => load(page + 1, true)} loading={loading}>
+            加载更多
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function MyProfilePage() {
@@ -275,12 +360,7 @@ export default function MyProfilePage() {
           {
             key: 'bookmarks',
             label: '收藏',
-            children: (
-              <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-secondary)' }}>
-                <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.3 }}>🔖</div>
-                <div>还没有收藏内容</div>
-              </div>
-            ),
+            children: <BookmarkCenter />,
           },
         ]}
       />

@@ -85,6 +85,7 @@ async function getMyProfile(userId) {
     `SELECT u.id, u.username, u.email, u.avatar_url, u.bio, u.gender,
             u.city, u.cover_image, u.reading_goal, u.book_count,
             u.follower_count, u.following_count, u.post_count,
+            u.status, u.role,
             u.created_at, u.updated_at,
             COALESCE(ups.profile_visible, 0)        AS profile_visible,
             COALESCE(ups.shelf_visible, 0)          AS shelf_visible,
@@ -107,6 +108,8 @@ async function getMyProfile(userId) {
     username: u.username,
     email: u.email,
     avatarUrl: u.avatar_url,
+    status: u.status,
+    role: u.role || 'user',
     bio: u.bio,
     gender: u.gender,
     city: u.city,
@@ -225,10 +228,18 @@ async function saveReadingPreferences(userId, tagIds) {
     throw { status: 400, message: '请至少选择 3 个阅读偏好标签' };
   }
 
-  // 校验 tagIds 都是有效整数
-  const validIds = tagIds.map(id => parseInt(id)).filter(id => !isNaN(id));
+  // 当前数据库 user_reading_preferences 关联的是 book_categories.category_id
+  const validIds = [...new Set(tagIds.map(id => parseInt(id)).filter(id => !isNaN(id)))];
   if (validIds.length < 3) {
     throw { status: 400, message: '标签 ID 格式无效' };
+  }
+
+  const [categories] = await db.query(
+    'SELECT id FROM book_categories WHERE id IN (?) AND is_active = 1',
+    [validIds]
+  );
+  if (categories.length < 3) {
+    throw { status: 400, message: '所选阅读偏好中存在无效分类' };
   }
 
   await db.transaction(async (conn) => {
@@ -236,9 +247,9 @@ async function saveReadingPreferences(userId, tagIds) {
       'DELETE FROM user_reading_preferences WHERE user_id = ?',
       [userId]
     );
-    const rows = validIds.map(tagId => [userId, tagId]);
+    const rows = validIds.map(categoryId => [userId, categoryId]);
     await conn.query(
-      'INSERT INTO user_reading_preferences (user_id, tag_id) VALUES ?',
+      'INSERT INTO user_reading_preferences (user_id, category_id) VALUES ?',
       [rows]
     );
   });

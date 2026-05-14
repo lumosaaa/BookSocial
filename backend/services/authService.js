@@ -96,7 +96,7 @@ async function register({ email, code, username, password }) {
   const refreshToken = signRefreshToken({ id: userId });
 
   return {
-    user: { id: userId, username, email },
+    user: { id: userId, username, email, status: 1, role: 'user' },
     accessToken,
     refreshToken,
   };
@@ -165,6 +165,8 @@ async function loginWithPassword({ email, password }) {
       username: user.username,
       email: user.email,
       avatarUrl: user.avatar_url,
+      status: user.status,
+      role: user.role || 'user',
     },
     accessToken: signToken(payload),
     refreshToken: signRefreshToken({ id: user.id }),
@@ -198,6 +200,8 @@ async function loginWithCode({ email, code }) {
       username: user.username,
       email: user.email,
       avatarUrl: user.avatar_url,
+      status: user.status,
+      role: user.role || 'user',
     },
     accessToken: signToken(payload),
     refreshToken: signRefreshToken({ id: user.id }),
@@ -243,7 +247,13 @@ async function findOrCreateGoogleUser({ googleId, email, displayName, avatarUrl 
     );
     const payload = { id: user.id, username: user.username, status: user.status, role: user.role || 'user' };
     return {
-      user: { id: user.id, username: user.username, email: user.email },
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        status: user.status,
+        role: user.role || 'user',
+      },
       accessToken: signToken(payload),
       refreshToken: signRefreshToken({ id: user.id }),
       isNewUser: false,
@@ -272,7 +282,13 @@ async function findOrCreateGoogleUser({ googleId, email, displayName, avatarUrl 
 
   const payload = { id: userId, username: finalUsername, status: 1, role: 'user' };
   return {
-    user: { id: userId, username: finalUsername, email: email || null },
+    user: {
+      id: userId,
+      username: finalUsername,
+      email: email || null,
+      status: 1,
+      role: 'user',
+    },
     accessToken: signToken(payload),
     refreshToken: signRefreshToken({ id: userId }),
     isNewUser: true,
