@@ -20,14 +20,15 @@ const GOOGLE_ERROR_TEXT: Record<string, string> = {
  *
  * 流程：
  *   1. 从 URL 参数读取 Token
- *   2. 存入 localStorage
- *   3. 拉取用户信息，写入 Zustand store
+ *   2. 先写入 Zustand token，让 apiClient 能带 Authorization
+ *   3. 拉取用户信息，写入完整鉴权状态
  *   4. 新用户 → 跳首页（可选后续引导），老用户 → 跳首页
  */
 export default function GoogleCallback() {
   const navigate    = useNavigate();
   const [params]    = useSearchParams();
   const setUser     = useAuthStore((s) => s.setUser);
+  const setToken    = useAuthStore((s) => s.setToken);
   const hasRunRef   = useRef(false); // 防止 React StrictMode 双执行
 
   useEffect(() => {
@@ -45,9 +46,8 @@ export default function GoogleCallback() {
       return;
     }
 
-    // 先临时存 Token，让 apiClient 拦截器能带上 Authorization header
-    localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
+    // 先写入 store，让 apiClient 拦截器能带上 Authorization header。
+    setToken(accessToken);
 
     // 拉取完整用户信息
     userApi
@@ -61,11 +61,10 @@ export default function GoogleCallback() {
         }
       })
       .catch(() => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        useAuthStore.getState().clearUser();
         navigate('/login?error=fetch_failed');
       });
-  }, []);
+  }, [navigate, params, setToken, setUser]);
 
   const error = params.get('error');
   const errorText = error ? (GOOGLE_ERROR_TEXT[error] || 'Google 登录失败，请稍后重试。') : '';

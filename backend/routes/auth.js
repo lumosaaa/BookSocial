@@ -1,6 +1,7 @@
 const express = require('express');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const { SocksProxyAgent } = require('socks-proxy-agent');
 const router = express.Router();
 
 const { authMiddleware } = require('../common/authMiddleware');
@@ -30,34 +31,50 @@ function redirectGoogleError(req, res, errorCode) {
   res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(errorCode)}`);
 }
 
+function createGoogleOAuthAgent() {
+  const proxyUrl = process.env.GOOGLE_OAUTH_PROXY;
+  if (!proxyUrl) return null;
+
+  if (/^socks/i.test(proxyUrl)) {
+    return new SocksProxyAgent(proxyUrl.replace(/^socks5:\/\//i, 'socks5h://'));
+  }
+
+  throw new Error('GOOGLE_OAUTH_PROXY must start with socks, for example socks5h://127.0.0.1:7897');
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Passport Google Strategy 初始化
 //  （app.js 中需 app.use(passport.initialize())）
 // ─────────────────────────────────────────────────────────────
 
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID:     process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL:  process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/auth/google/callback',
-      proxy:        true,
-    },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        const result = await findOrCreateGoogleUser({
-          googleId:    profile.id,
-          email:       profile.emails?.[0]?.value || null,
-          displayName: profile.displayName || `书友_${profile.id.slice(-6)}`,
-          avatarUrl:   profile.photos?.[0]?.value || null,
-        });
-        done(null, result);
-      } catch (err) {
-        done(err, null);
-      }
+const googleStrategy = new GoogleStrategy(
+  {
+    clientID:     process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL:  process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/auth/google/callback',
+    proxy:        true,
+  },
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      const result = await findOrCreateGoogleUser({
+        googleId:    profile.id,
+        email:       profile.emails?.[0]?.value || null,
+        displayName: profile.displayName || `书友_${profile.id.slice(-6)}`,
+        avatarUrl:   profile.photos?.[0]?.value || null,
+      });
+      done(null, result);
+    } catch (err) {
+      done(err, null);
     }
-  )
+  }
 );
+
+const googleOAuthAgent = createGoogleOAuthAgent();
+if (googleOAuthAgent) {
+  googleStrategy._oauth2.setAgent(googleOAuthAgent);
+}
+
+passport.use(googleStrategy);
 
 // ─────────────────────────────────────────────────────────────
 //  POST /api/v1/auth/send-code  发送邮箱验证码
